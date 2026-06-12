@@ -1,0 +1,24 @@
+# SIDRU — Broker MQTT (Mosquitto) para la comunicación backend ↔ Smart Bin.
+# Levantar:  docker compose up -d   (ver README.md para crear el usuario 'sidru' primero)
+# El password del usuario vive en mosquitto/config/passwd (gitignored) y en .env (gitignored).
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"          # MQTT (LAN). Exponer 9001 solo si se usa WebSocket.
+    environment:
+      - MQTT_PASSWORD=${MQTT_PASSWORD:?define MQTT_PASSWORD en infra/mqtt/.env}
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    healthcheck:
+      # Verifica que el broker acepta conexión + autenticación del usuario 'sidru'.
+      test: ["CMD-SHELL", "mosquitto_sub -h 127.0.0.1 -p 1883 -u sidru -P \"$$MQTT_PASSWORD\" -t healthcheck -E || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
