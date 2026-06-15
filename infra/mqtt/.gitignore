@@ -1,0 +1,5 @@
+# Secretos y datos runtime del broker — NUNCA versionar
+mosquitto/config/passwd
+mosquitto/data/
+mosquitto/log/
+.env
