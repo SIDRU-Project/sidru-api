@@ -6,6 +6,7 @@ import com.sidru.sidru_api.users.domain.model.commands.SubtractPointsCommand;
 import com.sidru.sidru_api.users.domain.model.queries.GetUserProfileByUserIdQuery;
 import com.sidru.sidru_api.users.domain.services.UserProfileCommandService;
 import com.sidru.sidru_api.users.domain.services.UserProfileQueryService;
+import com.sidru.sidru_api.users.infrastructure.persistence.jpa.repositories.UserProfileRepository;
 import com.sidru.sidru_api.users.interfaces.acl.UserProfileContextFacade;
 import org.springframework.stereotype.Service;
 
@@ -14,11 +15,14 @@ public class UserProfileContextFacadeImpl implements UserProfileContextFacade {
 
     private final UserProfileCommandService userProfileCommandService;
     private final UserProfileQueryService userProfileQueryService;
+    private final UserProfileRepository userProfileRepository;
 
     public UserProfileContextFacadeImpl(UserProfileCommandService userProfileCommandService,
-                                        UserProfileQueryService userProfileQueryService) {
+                                        UserProfileQueryService userProfileQueryService,
+                                        UserProfileRepository userProfileRepository) {
         this.userProfileCommandService = userProfileCommandService;
         this.userProfileQueryService = userProfileQueryService;
+        this.userProfileRepository = userProfileRepository;
     }
 
     @Override
@@ -52,5 +56,10 @@ public class UserProfileContextFacadeImpl implements UserProfileContextFacade {
         return userProfileQueryService.handle(new GetUserProfileByUserIdQuery(userId))
                 .map(p -> p.getTotalPoints())
                 .orElse(0);
+    }
+
+    @Override
+    public long countUsers() {
+        return userProfileRepository.count();
     }
 }
