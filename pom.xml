@@ -214,12 +214,23 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
-                            <!-- haltOnFailure=false: reporta el % sin romper el build. Cambiar a true
-                                 para bloquear el merge cuando la cobertura global alcance el 70%. -->
-                            <haltOnFailure>false</haltOnFailure>
+                            <!-- US-33 / RNF-17: la cobertura >=70% se EXIGE (haltOnFailure=true) sobre los
+                                 SERVICIOS CRÍTICOS, no sobre todo el bundle (que aún arrastra controllers/
+                                 adapters sin test). Cada clase listada debe mantener >=70% de líneas o el
+                                 build falla en `verify`. Añade clases a la lista a medida que las cubras. -->
+                            <haltOnFailure>true</haltOnFailure>
                             <rules>
                                 <rule>
-                                    <element>BUNDLE</element>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.sidru.sidru_api.iam.infrastructure.tokens.jwt.services.TokenServiceImpl</include>
+                                        <include>com.sidru.sidru_api.sessions.application.internal.commandservices.RecyclingSessionCommandServiceImpl</include>
+                                        <include>com.sidru.sidru_api.sessions.application.internal.scheduling.BlockchainReconciliationService</include>
+                                        <include>com.sidru.sidru_api.blockchain.application.internal.commandservices.WithdrawalCommandService</include>
+                                        <include>com.sidru.sidru_api.blockchain.application.internal.custodial.CustodialWalletService</include>
+                                        <include>com.sidru.sidru_api.blockchain.domain.model.valueobjects.EvmAddress</include>
+                                        <include>com.sidru.sidru_api.metrics.application.internal.queryservices.MetricsService</include>
+                                    </includes>
                                     <limits>
                                         <limit>
                                             <counter>LINE</counter>
