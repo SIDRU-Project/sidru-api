@@ -20,7 +20,9 @@ public class SessionsControllerAdvice {
         return build(SESSION_NOT_FOUND.getCode(), SESSION_NOT_FOUND.getMessage());
     }
 
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    // 409 CONFLICT: la solicitud choca con el estado actual del recurso (p.ej. confirmar
+    // una sesión ya CONFIRMED/EXPIRED/CANCELLED, o una 2ª confirmación concurrente). US-23.
+    @ResponseStatus(HttpStatus.CONFLICT)
     @ExceptionHandler(InvalidSessionStateException.class)
     public ErrorResource handleInvalidState() {
         return build(INVALID_SESSION_STATE.getCode(), INVALID_SESSION_STATE.getMessage());

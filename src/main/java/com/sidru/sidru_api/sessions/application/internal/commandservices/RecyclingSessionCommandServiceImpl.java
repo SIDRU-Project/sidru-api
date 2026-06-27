@@ -97,7 +97,10 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
     @Override
     @Transactional
     public Optional<RecyclingSession> handle(ConfirmRecyclingSessionCommand command) {
-        var session = sessionRepository.findByQrToken(command.qrToken())
+        // Lock pesimista (US-23): serializa confirmaciones concurrentes del mismo QR.
+        // La 2ª solicitud espera el commit de la 1ª, lee la sesión ya CONFIRMED y cae
+        // en el guard de estado de abajo, evitando doble acreditación y doble mint.
+        var session = sessionRepository.findByQrTokenForUpdate(command.qrToken())
                 .orElseThrow(RecyclingSessionNotFoundException::new);
 
         if (!session.isPending()) {
