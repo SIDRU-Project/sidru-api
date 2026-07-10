@@ -17,4 +17,7 @@ public interface UserProfileContextFacade {
     Boolean existsByUserId(Long userId);
 
     Integer fetchTotalPointsByUserId(Long userId);
+
+    /** Total de usuarios con perfil (métricas, US-36). */
+    long countUsers();
 }

@@ -9,6 +9,7 @@ import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
+import org.springframework.integration.mqtt.inbound.MqttPahoMessageDrivenChannelAdapter;
 import org.springframework.integration.mqtt.outbound.MqttPahoMessageHandler;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
@@ -28,6 +29,9 @@ public class MqttConfiguration {
 
     @Value("${sidru.mqtt.password}")
     private String password;
+
+    @Value("${sidru.mqtt.topic.bin-events}")
+    private String eventsTopic;   // sidru/bin/+/events
 
     @Bean
     public MqttPahoClientFactory mqttClientFactory() {
@@ -54,5 +58,26 @@ public class MqttConfiguration {
         handler.setAsync(true);
         handler.setDefaultQos(1);
         return handler;
+    }
+
+    // ───────────────────────── Inbound: logs de dispositivos (US-30) ─────────────────────────
+    @Bean
+    public MessageChannel mqttInboundChannel() {
+        return new DirectChannel();
+    }
+
+    /**
+     * Suscriptor a sidru/bin/+/events: empuja cada evento al canal inbound, donde lo
+     * recoge {@code DeviceEventsInboundHandler}. La salida (payload String + header con el
+     * tópico) la consume el @ServiceActivator de ese handler.
+     */
+    @Bean
+    public MqttPahoMessageDrivenChannelAdapter mqttInboundAdapter(MqttPahoClientFactory factory) {
+        MqttPahoMessageDrivenChannelAdapter adapter =
+                new MqttPahoMessageDrivenChannelAdapter(clientId + "-sub", factory, eventsTopic);
+        adapter.setCompletionTimeout(5000);
+        adapter.setQos(1);
+        adapter.setOutputChannel(mqttInboundChannel());
+        return adapter;
     }
 }
