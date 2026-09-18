@@ -151,4 +151,18 @@ abstract class CpBaseTest {
         String qrToken = field(body, "qrToken", String.class);
         return sessionRepository.findByQrToken(qrToken).orElseThrow();
     }
+
+    /**
+     * Acredita exactamente {@code points} puntos al ciudadano confirmando una sesion nueva
+     * (price-per-kg-soles=4.00, points-per-sol=100 -> 400 puntos/kg, ver application-test.properties).
+     * Util para las pruebas de retiro (spec sidru-mainnet), que parten de un saldo de puntos dado.
+     */
+    protected void givePoints(TestUser citizen, int points) throws Exception {
+        var bin = newSmartBin();
+        double weightGrams = points * 2.5; // 1000 g/kg / 400 puntos/kg
+        var session = openSession(bin, 20, weightGrams);
+        mockMvc.perform(apiPost("/sessions/qr/" + session.getQrToken() + "/confirm")
+                        .header("Authorization", citizen.bearer()))
+                .andExpect(status().isOk());
+    }
 }
