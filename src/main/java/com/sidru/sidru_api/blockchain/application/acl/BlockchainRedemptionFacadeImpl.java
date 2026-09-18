@@ -13,12 +13,10 @@ import java.math.BigInteger;
 import java.util.Optional;
 
 /**
- * Implementation of the blockchain redemption ACL.
- *
- * <p>Resolves the citizen's custodial address and burns {@code pointsCost} CTC via the
- * privileged {@code redeemFrom} call (backend pays gas, custodial never signs). Honors
- * {@code BLOCKCHAIN_ENABLED} and is strictly best-effort: any failure is caught and
- * logged, never propagated, so the off-chain reward redemption is never rolled back.
+ * Burns {@code pointsCost} CTC from the citizen's custodial address via the privileged
+ * {@code redeemFrom} call (backend pays gas, custodial never signs). Honors
+ * {@code BLOCKCHAIN_ENABLED} and is strictly best-effort: any failure is caught and logged,
+ * never propagated, so the off-chain reward redemption is never rolled back.
  */
 @Service
 public class BlockchainRedemptionFacadeImpl implements BlockchainRedemptionFacade {

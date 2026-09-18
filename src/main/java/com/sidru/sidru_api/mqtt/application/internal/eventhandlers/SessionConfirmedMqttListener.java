@@ -10,11 +10,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Reacts to a confirmed recycling session by pushing an OPEN command to the originating Smart Bin
- * over MQTT (US-IOT-05 / US-IOT-07). Only active when {@code sidru.mqtt.enabled=true}.
+ * Ante una sesión confirmada, publica OPEN al Smart Bin de origen por MQTT
+ * (US-IOT-05 / US-IOT-07). Solo activo con {@code sidru.mqtt.enabled=true}.
  *
- * <p>This keeps the {@code sessions} context unaware of MQTT: it merely publishes a neutral
- * {@link SessionConfirmedEvent}; the {@code mqtt} context resolves the device and publishes.
+ * <p>Así {@code sessions} no conoce MQTT: solo publica un {@link SessionConfirmedEvent}
+ * y aquí se resuelve el dispositivo.
  */
 @Component
 @ConditionalOnProperty(name = "sidru.mqtt.enabled", havingValue = "true")
@@ -43,7 +43,7 @@ public class SessionConfirmedMqttListener {
             LOGGER.info("Published OPEN to bin {} after session confirmation (user {})",
                     deviceCode, event.userId());
         } catch (Exception ex) {
-            // Best-effort: a broker failure must never break the session confirmation flow.
+            // Best-effort: un fallo del broker no debe romper la confirmación de la sesión.
             LOGGER.error("Failed to publish OPEN to bin {}: {}", deviceCode, ex.getMessage(), ex);
         }
     }

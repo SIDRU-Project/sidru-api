@@ -7,15 +7,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * Implementation of the notifications ACL.
+ * Delega en el {@link NotificationPort} interno usando el tópico FCM por usuario
+ * {@code user-{userId}}. La app suscribe a cada ciudadano logueado a ese tópico
+ * (previsto para Sprint 2), así no hace falta guardar device tokens.
  *
- * <p>Delegates to the internal {@link NotificationPort}, targeting the per-user FCM
- * topic {@code "user-{userId}"}. Convention: the mobile app subscribes each signed-in
- * citizen to that topic (planned for Sprint 2), so the backend can push to a user
- * without persisting device tokens.
- *
- * <p>Best-effort: any failure (FCM disabled, network, etc.) is caught and logged; it
- * is never propagated, so callers such as the blockchain event listener are unaffected.
+ * <p>Best-effort: cualquier fallo (FCM apagado, red…) se loguea y nunca se propaga.
  */
 @Service
 public class NotificationContextFacadeImpl implements NotificationContextFacade {
@@ -39,7 +35,7 @@ public class NotificationContextFacadeImpl implements NotificationContextFacade 
         try {
             notificationPort.sendToTopic(topic, title, body);
         } catch (Exception ex) {
-            // Best-effort: never break the caller's flow.
+            // Best-effort: nunca romper el flujo del que llama.
             LOGGER.warn("Failed to notify user {} on topic {}: {}", userId, topic, ex.getMessage());
         }
     }

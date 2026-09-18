@@ -86,6 +86,8 @@ public class WebSecurityConfiguration {
                                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/sessions").permitAll()
                                 // Citizen can preview a session before confirming
                                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/sessions/qr/*").permitAll()
+                                // Health check del despliegue: publico para el orquestador (CP035/CP041)
+                                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                                 // OpenAPI / Swagger
                                 .requestMatchers(
                                         "/v3/api-docs",

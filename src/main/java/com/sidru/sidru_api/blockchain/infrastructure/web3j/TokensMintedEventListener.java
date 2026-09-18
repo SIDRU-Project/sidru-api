@@ -29,21 +29,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Subscribes to the on-chain {@code TokensMinted} event and forwards each occurrence to
+ * Subscribes to the on-chain {@code TokensMinted} event and forwards each one to
  * {@link TokensMintedHandler} (US-BC-07 / US-39, RNF-BC-06).
  *
- * <p>Event signature: {@code TokensMinted(address indexed user, uint256 amount, uint256 indexed sessionId)}.
- * <ul>
- *   <li>topics[0] = keccak256 of the event signature (filter topic0)</li>
- *   <li>topics[1] = user (indexed address)</li>
- *   <li>topics[2] = sessionId (indexed uint256)</li>
- *   <li>data      = amount (non-indexed uint256)</li>
- * </ul>
+ * Signature: {@code TokensMinted(address indexed user, uint256 amount, uint256 indexed sessionId)}.
+ * topics[0]=event signature hash, topics[1]=user (indexed), topics[2]=sessionId (indexed),
+ * data=amount (non-indexed).
  *
- * <p>Resilience: subscription starts at {@code LATEST} (no historical replay) on app start.
- * It runs on its own scheduler thread, never blocking startup. On RxJava {@code onError} or a
- * failure to connect, it re-subscribes with a bounded exponential backoff. With
- * {@code BLOCKCHAIN_ENABLED=false} it does not subscribe nor touch the network. No secrets logged.
+ * Resilience: subscribes from {@code LATEST} (no historical replay) on a daemon scheduler thread,
+ * so it never blocks startup. On RxJava onError or a connection failure it re-subscribes with
+ * bounded exponential backoff. With {@code BLOCKCHAIN_ENABLED=false} it does not subscribe. No
+ * secrets are logged.
  */
 @Component
 public class TokensMintedEventListener {

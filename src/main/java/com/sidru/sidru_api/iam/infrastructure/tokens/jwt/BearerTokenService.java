@@ -6,9 +6,8 @@ import org.springframework.security.core.Authentication;
 
 public interface BearerTokenService extends TokenService {
 
-    /** Extracts the JWT token from the Authorization HTTP header. */
+    /** Extrae el token del header Authorization. */
     String getBearerTokenFrom(HttpServletRequest token);
 
-    /** Generates a JWT from a Spring Authentication object. */
     String generateToken(Authentication authentication);
 }

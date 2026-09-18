@@ -13,20 +13,15 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Reconciles reward redemptions whose CTC burn was not mirrored on-chain (RF-17 resilience).
+ * Retries reward redemptions whose CTC burn was not mirrored on-chain (RF-17).
+ * A failed burn (custodial address short on CTC because mints were still pending, or an RPC
+ * error) still lets the off-chain redemption complete with points deducted, but leaves no
+ * blockchainTxHash — this job retries the burn for such REDEEM transactions.
  *
- * <p>When the burn fails at redemption time — e.g. the custodial address had insufficient
- * CTC because mints were still pending, or an RPC error — the off-chain redemption still
- * completes (points deducted) by design, but no {@code blockchainTxHash} is attached. This
- * scheduled job periodically retries the burn for such {@code REDEEM} transactions.
- *
- * <p>Safe to retry: the on-chain {@code redeemFrom} is idempotent per {@code rewardTxId}
- * (anti double-redeem). If a burn already happened on-chain but its hash was never persisted,
- * {@code burnForRedemption} detects it ({@code rewardRedeemed}) and confirms without burning
- * again, so this job can never double-burn.
- *
- * <p>Lives in the {@code rewards} context, which owns {@code PointTransaction} and already
- * depends on {@code blockchain} via {@link ExternalBlockchainService}.
+ * Safe to retry: on-chain redeemFrom is idempotent per rewardTxId (anti double-redeem). If
+ * the burn already happened but its hash was lost, burnForRedemption detects it and confirms
+ * without burning again, so it can never double-burn. Lives in rewards (owns PointTransaction,
+ * already depends on blockchain via ExternalBlockchainService).
  */
 @Service
 public class RewardBurnReconciliationService {
@@ -46,8 +41,8 @@ public class RewardBurnReconciliationService {
     }
 
     /**
-     * Periodic reconciliation tick. Disabled as a whole when blockchain is off. Each
-     * redemption is processed independently; the burn manages its own transaction.
+     * Periodic tick. No-op when blockchain is off. Each redemption is handled independently;
+     * the burn owns its transaction.
      */
     @Scheduled(
             initialDelayString = "${sidru.blockchain.reconciliation.initial-delay-ms:60000}",
@@ -73,8 +68,8 @@ public class RewardBurnReconciliationService {
     }
 
     /**
-     * Retries the on-chain burn for a single redemption. Returns {@code true} if a tx hash
-     * (or idempotent marker) was obtained and persisted. Never throws.
+     * Retries the burn for one redemption; returns true if a hash (or idempotent marker)
+     * was obtained and saved. Never throws.
      */
     private boolean reconcile(PointTransaction tx) {
         try {

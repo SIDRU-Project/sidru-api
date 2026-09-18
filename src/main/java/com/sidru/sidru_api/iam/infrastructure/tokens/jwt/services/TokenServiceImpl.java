@@ -66,7 +66,7 @@ public class TokenServiceImpl implements BearerTokenService {
     public boolean validateToken(String token) {
         try {
             Jwts.parser().verifyWith(getSigningKey()).build().parseSignedClaims(token);
-            LOGGER.info("Token is valid");
+            // Token válido = caso normal; no se loguea (el access log ya registra la petición).
             return true;
         } catch (SignatureException e) {
             LOGGER.error("Invalid JWT Signature: {}", e.getMessage());

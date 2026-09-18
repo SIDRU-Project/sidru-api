@@ -39,18 +39,20 @@ public class BearerAuthorizationRequestFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         try {
             String token = tokenService.getBearerTokenFrom(request);
-            LOGGER.info("Token: {}", token);
             if (token != null && tokenService.validateToken(token)) {
                 Long userId = tokenService.getUserIdFromToken(token);
                 var userDetails = userDetailsService.loadUserByUsername(userId.toString());
                 SecurityContextHolder.getContext()
                         .setAuthentication(
                                 UsernamePasswordAuthenticationTokenBuilder.build(userDetails, request));
-            } else {
-                LOGGER.info("Token is not valid");
+            } else if (token != null) {
+                // Token presente pero inválido/expirado. No logueamos el valor del token:
+                // sería una fuga de credenciales.
+                LOGGER.debug("Bearer token present but invalid or expired");
             }
+            // Sin token es normal en endpoints públicos y de dispositivo (X-Device-Api-Key).
         } catch (Exception e) {
-            LOGGER.error("Cannot set user authentication: {}", e.getMessage());
+            LOGGER.warn("Could not set user authentication from bearer token: {}", e.getMessage());
         }
         filterChain.doFilter(request, response);
     }

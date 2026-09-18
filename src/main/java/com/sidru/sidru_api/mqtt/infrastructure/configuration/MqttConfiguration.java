@@ -60,16 +60,15 @@ public class MqttConfiguration {
         return handler;
     }
 
-    // ───────────────────────── Inbound: logs de dispositivos (US-30) ─────────────────────────
+    // Inbound: logs de dispositivos (US-30)
     @Bean
     public MessageChannel mqttInboundChannel() {
         return new DirectChannel();
     }
 
     /**
-     * Suscriptor a sidru/bin/+/events: empuja cada evento al canal inbound, donde lo
-     * recoge {@code DeviceEventsInboundHandler}. La salida (payload String + header con el
-     * tópico) la consume el @ServiceActivator de ese handler.
+     * Suscriptor a sidru/bin/+/events: empuja cada evento al canal inbound, donde lo recoge
+     * {@code DeviceEventsInboundHandler} (payload String + el tópico en un header).
      */
     @Bean
     public MqttPahoMessageDrivenChannelAdapter mqttInboundAdapter(MqttPahoClientFactory factory) {

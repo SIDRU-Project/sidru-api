@@ -18,6 +18,16 @@ public class BlockchainProperties {
     private String privateKey;
     private String walletMasterSeed;
 
+    /**
+     * Etiqueta de la red que se expone a la app y se persiste en cada transaccion
+     * (p. ej. "polygon-amoy" o "polygon"). Debe cambiar junto con node-url y
+     * contract-address al mover el despliegue de testnet a mainnet.
+     */
+    private String networkLabel;
+
+    /** Base del explorador de bloques, sin barra final (p. ej. https://polygonscan.com). */
+    private String explorerBaseUrl;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -56,5 +66,30 @@ public class BlockchainProperties {
 
     public void setWalletMasterSeed(String walletMasterSeed) {
         this.walletMasterSeed = walletMasterSeed;
+    }
+
+    public String getNetworkLabel() {
+        return networkLabel;
+    }
+
+    public void setNetworkLabel(String networkLabel) {
+        this.networkLabel = networkLabel;
+    }
+
+    public String getExplorerBaseUrl() {
+        return explorerBaseUrl;
+    }
+
+    public void setExplorerBaseUrl(String explorerBaseUrl) {
+        this.explorerBaseUrl = explorerBaseUrl;
+    }
+
+    /** URL del explorador para una transaccion concreta. */
+    public String explorerTxUrl(String txHash) {
+        if (txHash == null || explorerBaseUrl == null) return null;
+        String base = explorerBaseUrl.endsWith("/")
+                ? explorerBaseUrl.substring(0, explorerBaseUrl.length() - 1)
+                : explorerBaseUrl;
+        return base + "/tx/" + txHash;
     }
 }

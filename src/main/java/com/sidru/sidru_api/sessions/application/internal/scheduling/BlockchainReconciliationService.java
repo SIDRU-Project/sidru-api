@@ -13,20 +13,14 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * Reconciles recycling sessions that were confirmed off-chain but never mirrored
- * on-chain (RF-18 resilience). When a mint fails — e.g. the backend wallet ran out of
- * POL — the session is still {@code CONFIRMED} and the citizen keeps their points, but
- * no CTC are minted and no {@code blockchainTxHash} is attached, leaving a points↔CTC
- * gap. This scheduled job periodically retries {@link BlockchainPort#recordSession} for
- * such sessions.
+ * Retries mints for sessions confirmed off-chain but never mirrored on-chain (RF-18).
+ * A failed mint (e.g. backend wallet out of POL) leaves the session CONFIRMED with the
+ * points credited but no CTC minted and no blockchainTxHash — a points/CTC gap this job
+ * closes.
  *
- * <p>Safe to retry: idempotency is guaranteed by the on-chain anti-double-spend
- * ({@code sessionRecorded[sessionId]}) plus {@code findBySessionId}. If a tx already
- * exists on-chain but the hash was never persisted locally, {@code recordSession}
- * returns the existing hash without re-minting, and this job attaches it (self-healing).
- *
- * <p>Lives in the {@code sessions} context, which already depends on
- * {@code BlockchainPort}; this avoids a {@code blockchain → sessions} dependency cycle.
+ * Safe to retry: the on-chain anti-double-spend (sessionRecorded) plus findBySessionId
+ * make recordSession idempotent — if the tx already exists it returns the hash without
+ * re-minting and we just attach it. Lives in sessions (not blockchain) to avoid a cycle.
  */
 @Service
 public class BlockchainReconciliationService {
@@ -46,9 +40,8 @@ public class BlockchainReconciliationService {
     }
 
     /**
-     * Periodic reconciliation tick. Disabled as a whole when blockchain is off (no point
-     * querying or minting). Each session is processed independently so one failure does
-     * not block the rest; {@code recordSession} manages its own transaction and retries.
+     * Periodic tick. No-op when blockchain is off. Each session is handled independently
+     * so one failure does not block the rest; recordSession owns its tx and retries.
      */
     @Scheduled(
             initialDelayString = "${sidru.blockchain.reconciliation.initial-delay-ms:60000}",
@@ -74,10 +67,9 @@ public class BlockchainReconciliationService {
     }
 
     /**
-     * Retries the on-chain mint for a single session. Returns {@code true} if a tx hash
-     * was obtained and persisted. Never throws: a failure is logged and left for the next
-     * tick. The hash is saved in its own transaction; {@code recordSession} already
-     * persisted the {@code BlockchainTransaction}, so a crash in between self-heals.
+     * Retries the mint for one session; returns true if a hash was obtained and saved.
+     * Never throws — a failure is logged and retried next tick. recordSession already
+     * persisted the BlockchainTransaction, so a crash before the save self-heals.
      */
     private boolean reconcile(RecyclingSession session) {
         try {

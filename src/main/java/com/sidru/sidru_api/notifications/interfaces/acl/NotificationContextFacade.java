@@ -1,25 +1,16 @@
 package com.sidru.sidru_api.notifications.interfaces.acl;
 
 /**
- * Anti-corruption layer (ACL) of the {@code notifications} bounded context.
- *
- * <p>Exposes a minimal, stable contract so other contexts (e.g. {@code blockchain})
- * can trigger user-facing push notifications without depending on the internal
- * {@code NotificationPort} or any FCM detail. This keeps inbound coupling at the
- * interface boundary, following the same pattern as
- * {@code users.interfaces.acl.UserProfileContextFacade}.
+ * ACL del contexto {@code notifications}: deja que otros contextos (p. ej. {@code blockchain})
+ * disparen push al ciudadano sin acoplarse al {@code NotificationPort} interno ni a FCM.
  */
 public interface NotificationContextFacade {
 
     /**
-     * Sends a best-effort push notification to a single citizen.
+     * Push best-effort a un ciudadano. La implementación nunca debe propagar excepciones:
+     * un fallo aquí no puede romper el flujo del que llama (p. ej. confirmar una tx on-chain).
      *
-     * <p>Implementations must never propagate exceptions: a failure here must not
-     * break the caller's flow (e.g. confirming an on-chain transaction).
-     *
-     * @param userId citizen id (resolved to the FCM topic {@code "user-{userId}"})
-     * @param title  notification title
-     * @param body   notification body
+     * @param userId id del ciudadano (mapeado al tópico FCM {@code user-{userId}})
      */
     void notifyUser(Long userId, String title, String body);
 }

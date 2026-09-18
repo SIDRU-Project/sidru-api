@@ -31,11 +31,14 @@ public class WalletController {
 
     private final WalletQueryService walletQueryService;
     private final WithdrawalCommandService withdrawalCommandService;
+    private final WithdrawalStatusResourceFromEntityAssembler withdrawalStatusAssembler;
 
     public WalletController(WalletQueryService walletQueryService,
-                            WithdrawalCommandService withdrawalCommandService) {
+                            WithdrawalCommandService withdrawalCommandService,
+                            WithdrawalStatusResourceFromEntityAssembler withdrawalStatusAssembler) {
         this.walletQueryService = walletQueryService;
         this.withdrawalCommandService = withdrawalCommandService;
+        this.withdrawalStatusAssembler = withdrawalStatusAssembler;
     }
 
     @GetMapping("/me")
@@ -59,8 +62,7 @@ public class WalletController {
             @Valid @RequestBody WithdrawRequestResource resource) {
         WithdrawalRequest request =
                 withdrawalCommandService.withdraw(principal.getUserId(), resource.toAddress());
-        return ResponseEntity.ok(
-                WithdrawalStatusResourceFromEntityAssembler.toResourceFromEntity(request));
+        return ResponseEntity.ok(withdrawalStatusAssembler.toResourceFromEntity(request));
     }
 
     @GetMapping("/withdraw/status")
@@ -70,7 +72,6 @@ public class WalletController {
         if (request == null) {
             return ResponseEntity.noContent().build();
         }
-        return ResponseEntity.ok(
-                WithdrawalStatusResourceFromEntityAssembler.toResourceFromEntity(request));
+        return ResponseEntity.ok(withdrawalStatusAssembler.toResourceFromEntity(request));
     }
 }

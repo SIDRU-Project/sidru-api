@@ -37,8 +37,8 @@ import java.util.List;
  * contract on Polygon Amoy. No web3j CLI wrapper is used; calls are encoded with
  * {@link FunctionEncoder} and sent through a {@link RawTransactionManager}.
  *
- * <p>The backend wallet (BACKEND_ROLE) signs and pays gas. Custodial user addresses
- * never sign. The signing key is loaded lazily and never logged.
+ * The backend wallet (BACKEND_ROLE) signs and pays gas. Custodial user addresses never
+ * sign. The signing key is loaded lazily and never logged.
  */
 @Component
 public class ChapaTuCriptoContract {
@@ -160,6 +160,31 @@ public class ChapaTuCriptoContract {
     }
 
     /**
+     * sessionRecorded(uint256) view call. Returns whether a {@code sessionId} was already
+     * recorded/minted on-chain (anti double-spend). Lets the backend check idempotency BEFORE
+     * a (re)mint without spending gas: if it returns true, sending {@code recordAndReward}
+     * would only revert with "session already recorded" and burn POL for nothing. No gas: it
+     * is an eth_call. Mirrors {@link #rewardRedeemed(BigInteger)} on the mint side.
+     */
+    public boolean sessionRecorded(BigInteger sessionId) throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "sessionRecorded",
+                Collections.singletonList(new Uint256(sessionId)),
+                Collections.singletonList(new TypeReference<Bool>() {}));
+        String encoded = FunctionEncoder.encode(function);
+        EthCall response = web3j.ethCall(
+                        Transaction.createEthCallTransaction(fromAddress, properties.getContractAddress(), encoded),
+                        DefaultBlockParameterName.LATEST)
+                .send();
+        if (response.isReverted()) {
+            throw new IllegalStateException("sessionRecorded reverted: " + response.getRevertReason());
+        }
+        List<Type> decoded = FunctionReturnDecoder.decode(response.getValue(), function.getOutputParameters());
+        return !decoded.isEmpty() && (Boolean) decoded.get(0).getValue();
+    }
+
+    /**
      * rewardRedeemed(uint256) view call. Returns whether a {@code rewardTxId} was already
      * burned on-chain (anti double-redeem). Lets the backend check idempotency before a
      * (re)burn without spending gas. No gas: it is an eth_call.
@@ -198,21 +223,13 @@ public class ChapaTuCriptoContract {
     }
 
     /**
-     * Sends a state-changing call as an EIP-1559 (type-2) transaction.
-     *
-     * <p>Polygon Amoy is an EIP-1559 chain: legacy static gas pricing
-     * ({@code DefaultGasProvider.GAS_PRICE}) underprices or stalls transactions, which can lead to
-     * replaced/rejected txs or wrong fees on real mint/withdraw. We therefore price dynamically:
-     * <ul>
-     *   <li>{@code maxPriorityFeePerGas} comes from {@code eth_maxPriorityFeePerGas}; if the node
-     *       does not support it or returns null, we fall back to a safe Amoy default (30 gwei).</li>
-     *   <li>{@code baseFee} is read from the latest block; {@code maxFeePerGas = baseFee*2 + tip}
-     *       to absorb base-fee growth across a couple of blocks.</li>
-     *   <li>If the latest block has no {@code baseFeePerGas} (non-1559 response), we degrade to a
-     *       legacy {@code sendTransaction} so the call still goes through.</li>
-     * </ul>
-     * The {@link RawTransactionManager} is already built with chainId 80002, so it can sign the
-     * type-2 envelope. balanceOf is an eth_call (view) and never reaches this path: it spends no gas.
+     * Sends a state-changing call as an EIP-1559 (type-2) transaction. Amoy is EIP-1559, so legacy
+     * static pricing ({@code DefaultGasProvider.GAS_PRICE}) underprices/stalls txs; we price
+     * dynamically instead: {@code maxPriorityFeePerGas} from {@code eth_maxPriorityFeePerGas} (or a
+     * 30 gwei Amoy fallback), {@code maxFeePerGas = baseFee*2 + tip} to absorb base-fee growth. If
+     * the latest block has no {@code baseFeePerGas} (non-1559 response) we degrade to a legacy
+     * {@code sendTransaction}. The {@link RawTransactionManager} is built with chainId 80002 to sign
+     * the type-2 envelope. balanceOf is an eth_call and never reaches this path (no gas).
      */
     private TransactionReceipt sendTransaction(Function function) throws Exception {
         String encoded = FunctionEncoder.encode(function);

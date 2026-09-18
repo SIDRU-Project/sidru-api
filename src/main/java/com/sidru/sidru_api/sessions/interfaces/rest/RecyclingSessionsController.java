@@ -5,6 +5,7 @@ import com.sidru.sidru_api.sessions.domain.model.commands.CancelRecyclingSession
 import com.sidru.sidru_api.sessions.domain.model.commands.ConfirmRecyclingSessionCommand;
 import com.sidru.sidru_api.sessions.domain.model.queries.GetRecyclingSessionByIdQuery;
 import com.sidru.sidru_api.sessions.domain.model.queries.GetRecyclingSessionByQrTokenQuery;
+import com.sidru.sidru_api.sessions.domain.model.queries.GetRecyclingSessionsByUserIdPagedQuery;
 import com.sidru.sidru_api.sessions.domain.model.queries.GetRecyclingSessionsByUserIdQuery;
 import com.sidru.sidru_api.sessions.domain.services.RecyclingSessionCommandService;
 import com.sidru.sidru_api.sessions.domain.services.RecyclingSessionQueryService;
@@ -12,6 +13,8 @@ import com.sidru.sidru_api.sessions.interfaces.rest.resources.CreateRecyclingSes
 import com.sidru.sidru_api.sessions.interfaces.rest.resources.RecyclingSessionResource;
 import com.sidru.sidru_api.sessions.interfaces.rest.transform.CreateRecyclingSessionCommandFromResourceAssembler;
 import com.sidru.sidru_api.sessions.interfaces.rest.transform.RecyclingSessionResourceFromEntityAssembler;
+import com.sidru.sidru_api.shared.interfaces.rest.resources.PagedResource;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -76,13 +79,35 @@ public class RecyclingSessionsController {
                 RecyclingSessionResourceFromEntityAssembler.toResourceFromEntity(session.get()));
     }
 
+    /**
+     * Historial del ciudadano autenticado, siempre ordenado por fecha de registro descendente.
+     *
+     * Sin parametros devuelve la lista completa (contrato historico que consume la app).
+     * Con {@code page} y/o {@code size} devuelve el envoltorio paginado con
+     * {@code content/page/size/totalElements/totalPages} (CP016 / US-22). Se mantienen las
+     * dos formas para no romper los clientes ya desplegados.
+     */
     @GetMapping("/me")
-    public ResponseEntity<List<RecyclingSessionResource>> myHistory(
-            @AuthenticationPrincipal UserDetailsImpl principal) {
-        var sessions = queryService.handle(new GetRecyclingSessionsByUserIdQuery(principal.getUserId()));
-        return ResponseEntity.ok(sessions.stream()
-                .map(RecyclingSessionResourceFromEntityAssembler::toResourceFromEntity)
-                .toList());
+    @Operation(summary = "Historial del ciudadano: lista completa, o pagina si se envia page/size")
+    public ResponseEntity<Object> myHistory(
+            @AuthenticationPrincipal UserDetailsImpl principal,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+
+        if (page == null && size == null) {
+            var sessions = queryService.handle(new GetRecyclingSessionsByUserIdQuery(principal.getUserId()));
+            return ResponseEntity.ok(sessions.stream()
+                    .map(RecyclingSessionResourceFromEntityAssembler::toResourceFromEntity)
+                    .toList());
+        }
+
+        var pageResult = queryService.handle(new GetRecyclingSessionsByUserIdPagedQuery(
+                principal.getUserId(),
+                page == null ? 0 : page,
+                size == null ? GetRecyclingSessionsByUserIdPagedQuery.DEFAULT_SIZE : size));
+
+        return ResponseEntity.ok(PagedResource.from(
+                pageResult, RecyclingSessionResourceFromEntityAssembler::toResourceFromEntity));
     }
 
     @DeleteMapping("/{id}/cancel")

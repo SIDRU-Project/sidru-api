@@ -35,7 +35,7 @@ public class SmartBinsController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SmartBinResource> register(@Valid @RequestBody RegisterSmartBinResource resource) {
         var command = RegisterSmartBinCommandFromResourceAssembler.toCommandFromResource(resource);
         var bin = smartBinCommandService.handle(command);
@@ -46,7 +46,7 @@ public class SmartBinsController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<SmartBinResource>> getAll() {
         var bins = smartBinQueryService.handle(new GetAllSmartBinsQuery());
         return ResponseEntity.ok(bins.stream()
@@ -62,7 +62,7 @@ public class SmartBinsController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<SmartBinResource> update(@PathVariable Long id,
                                                    @Valid @RequestBody UpdateSmartBinResource resource) {
         var command = UpdateSmartBinCommandFromResourceAssembler.toCommandFromResource(id, resource);

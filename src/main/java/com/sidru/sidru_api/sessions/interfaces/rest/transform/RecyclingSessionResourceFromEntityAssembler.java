@@ -8,6 +8,7 @@ public class RecyclingSessionResourceFromEntityAssembler {
     public static RecyclingSessionResource toResourceFromEntity(RecyclingSession s) {
         return new RecyclingSessionResource(
                 s.getId(),
+                s.getCreatedAt(),
                 s.getSmartBinId(),
                 s.getUserId(),
                 s.getCapCount(),

@@ -11,14 +11,10 @@ import org.web3j.crypto.Keys;
 import org.web3j.crypto.MnemonicUtils;
 
 /**
- * Resolves the deterministic custodial EVM address for a citizen.
- *
- * <p>Derivation: BIP-39 seed from {@code WALLET_MASTER_SEED} mnemonic, then BIP-32
- * path {@code m/44'/60'/0'/0/{userId}}. Only the public address is persisted and used
- * (for minting); the backend signs with its own key, never with the derived key. The
- * seed and derived private keys are never logged.
- *
- * <p>Idempotent: once an address exists for a userId it is reused.
+ * Resolves the deterministic custodial EVM address for a citizen. Derivation: BIP-39 seed from
+ * the {@code WALLET_MASTER_SEED} mnemonic, then BIP-32 path {@code m/44'/60'/0'/0/{userId}}. Only
+ * the public address is persisted (for minting); the backend signs with its own key, never the
+ * derived one. Seed and derived keys are never logged. Idempotent: an existing address is reused.
  */
 @Service
 public class CustodialWalletService {

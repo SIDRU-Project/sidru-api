@@ -1,8 +1,7 @@
 package com.sidru.sidru_api.notifications.application.internal.outboundservices.fcm;
 
 /**
- * Outbound port for sending push notifications.
- * Implemented by adapters in the infrastructure layer (FCM, mock, etc.).
+ * Puerto de salida para enviar push. Lo implementan adapters de infraestructura (FCM, mock…).
  */
 public interface NotificationPort {
     void sendToDevice(String fcmToken, String title, String body);

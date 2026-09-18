@@ -6,12 +6,9 @@ import org.springframework.stereotype.Service;
 import java.util.Optional;
 
 /**
- * Outbound ACL of the {@code rewards} context towards {@code blockchain}.
- *
- * <p>Lets the reward redemption flow keep the on-chain CTC balance in sync (burn)
- * without knowing anything about Web3j or custodial addresses — it only depends on the
- * {@link BlockchainRedemptionFacade} interface. Same pattern as
- * {@code rewards...acl.ExternalUserProfileService}.
+ * Outbound ACL of rewards towards blockchain. Lets the redemption flow keep the on-chain
+ * CTC balance in sync (burn) without knowing Web3j or custodial addresses — it only
+ * depends on BlockchainRedemptionFacade. Same pattern as ExternalUserProfileService.
  */
 @Service("rewardsExternalBlockchainService")
 public class ExternalBlockchainService {
@@ -24,7 +21,6 @@ public class ExternalBlockchainService {
 
     /**
      * Best-effort CTC burn mirroring an off-chain points deduction. Never throws.
-     *
      * @return the burn tx hash if executed on-chain, otherwise empty.
      */
     public Optional<String> burnForRedemption(Long userId, int pointsCost, Long rewardTxId) {

@@ -13,15 +13,11 @@ import java.math.BigInteger;
 import java.util.Optional;
 
 /**
- * Application service that reacts to the on-chain {@code TokensMinted} event (US-BC-07 / US-39).
- *
- * <p>Pure, chain-agnostic unit: it receives already-decoded values from the infrastructure
- * listener and (1) confirms the matching {@link BlockchainTransaction}, (2) fires a best-effort
- * FCM notification via the notifications ACL. It is idempotent: an already-confirmed transaction
- * is neither re-saved nor re-notified, so duplicate/replayed events are harmless (RNF-BC-07).
- *
- * <p>Decoupling: notifications are reached through {@link NotificationContextFacade} (the ACL),
- * not the internal notifications port.
+ * Reacts to the on-chain {@code TokensMinted} event (US-BC-07 / US-39). Chain-agnostic: receives
+ * already-decoded values from the listener, confirms the matching {@link BlockchainTransaction}
+ * and fires a best-effort FCM via the notifications ACL ({@link NotificationContextFacade}).
+ * Idempotent: an already-confirmed tx is neither re-saved nor re-notified, so duplicate/replayed
+ * events are harmless (RNF-BC-07).
  */
 @Service
 public class TokensMintedHandler {

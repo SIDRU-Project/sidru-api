@@ -66,7 +66,8 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
     public Optional<RecyclingSession> handle(CreateRecyclingSessionCommand command) {
         Long smartBinId = externalDevicesService.resolveSmartBinIdByApiKey(command.deviceApiKey());
         if (smartBinId == 0L) {
-            throw new UnauthorizedDeviceException();
+            // La credencial viaja en la excepcion para que el advice la audite enmascarada (CP008).
+            throw new UnauthorizedDeviceException(command.deviceApiKey());
         }
         if (command.capCount() < minCaps || command.capCount() > maxCaps) {
             throw new InvalidCapCountException();
@@ -97,9 +98,9 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
     @Override
     @Transactional
     public Optional<RecyclingSession> handle(ConfirmRecyclingSessionCommand command) {
-        // Lock pesimista (US-23): serializa confirmaciones concurrentes del mismo QR.
-        // La 2ª solicitud espera el commit de la 1ª, lee la sesión ya CONFIRMED y cae
-        // en el guard de estado de abajo, evitando doble acreditación y doble mint.
+        // Lock pesimista (US-23): serializa confirmaciones concurrentes del mismo QR. La
+        // 2ª espera el commit de la 1ª, la lee ya CONFIRMED y cae en el guard de abajo,
+        // evitando doble acreditación y doble mint.
         var session = sessionRepository.findByQrTokenForUpdate(command.qrToken())
                 .orElseThrow(RecyclingSessionNotFoundException::new);
 
@@ -107,27 +108,24 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
             throw new InvalidSessionStateException();
         }
         if (session.isExpired()) {
-            session.expire();
-            sessionRepository.save(session);
-            throw new SessionExpiredException();
+            // Marcar EXPIRED aqui no serviria: esta excepcion revierte la transaccion. Lo hace
+            // SessionExpirationService desde el advice, ya fuera de la transaccion (CP015).
+            throw new SessionExpiredException(session.getId());
         }
 
         session.confirm(command.userId());
 
-        // Update Smart Bin cap stats via ACL
         externalDevicesService.addCaps(session.getSmartBinId(), session.getCapCount());
 
-        // Credit citizen points/caps via ACL
         externalUserProfileService.addPointsAndCaps(
                 command.userId(), session.getPointsEarned(), session.getCapCount());
 
-        // Record on blockchain (no-op if disabled)
+        // no-op si la blockchain está deshabilitada
         blockchainPort.recordSession(session).ifPresent(session::attachBlockchainTx);
 
         var saved = sessionRepository.save(session);
 
-        // Notify other contexts (e.g. mqtt opens the bin gate). sessions stays decoupled:
-        // it only publishes a neutral domain event; whether anyone listens is not its concern.
+        // Evento de dominio neutro: mqtt abre la compuerta. sessions no sabe quién escucha.
         eventPublisher.publishEvent(new SessionConfirmedEvent(saved.getSmartBinId(), command.userId()));
 
         return Optional.of(saved);

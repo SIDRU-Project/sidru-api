@@ -9,10 +9,6 @@ import lombok.With;
 
 import java.util.List;
 
-/**
- * Role entity
- * <p>Represents the role of a user in the system. Used to define permissions.</p>
- */
 @Entity
 @Data
 @NoArgsConstructor

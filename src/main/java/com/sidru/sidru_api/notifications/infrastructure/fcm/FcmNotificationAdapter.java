@@ -11,16 +11,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Firebase Cloud Messaging adapter.
- *
- * <p>Sends real push notifications via the Firebase Admin SDK when
- * {@code sidru.firebase.enabled=true} and a {@link FirebaseMessaging} bean is available
- * (provided by {@link FirebaseConfig}). Otherwise it degrades to a safe no-op so the rest
- * of the system (mint confirmation, reward redemption) is never affected — push delivery
- * is best-effort by design (US-39).
- *
- * <p>The backend pushes to per-user topics ({@code user-{userId}}); the mobile app
- * subscribes each signed-in citizen to that topic, so no device-token registry is needed.
+ * Envía push reales por el Firebase Admin SDK cuando {@code sidru.firebase.enabled=true}
+ * y existe el bean {@link FirebaseMessaging} (de {@link FirebaseConfig}); si no, queda
+ * no-op para no afectar al resto del flujo (push best-effort, US-39). Empuja a tópicos
+ * por usuario {@code user-{userId}}, así no hace falta registro de device tokens.
  */
 @Service
 public class FcmNotificationAdapter implements NotificationPort {
@@ -66,24 +60,18 @@ public class FcmNotificationAdapter implements NotificationPort {
         return Notification.builder().setTitle(title).setBody(body).build();
     }
 
-    /**
-     * Sends best-effort: a delivery failure is logged but never propagated, so an FCM
-     * outage cannot break the caller's flow (on-chain confirmation, redemption, etc.).
-     */
+    /** Best-effort: un fallo de envío se loguea pero no se propaga (no rompe al que llama). */
     private void send(FirebaseMessaging messaging, Message message, String target) {
         try {
             String messageId = messaging.send(message);
             LOGGER.info("FCM push sent to {} (messageId={})", target, messageId);
         } catch (Exception ex) {
-            // Log the full stack/cause chain to surface the real root cause (auth, SSL, etc.).
+            // Stack completo para ver la causa real (auth, SSL, etc.).
             LOGGER.error("FCM push to {} failed: {}", target, ex.getMessage(), ex);
         }
     }
 
-    /**
-     * Returns the messaging client when push is active, or {@code null} (no-op) when
-     * disabled or misconfigured. Never throws.
-     */
+    /** Devuelve el cliente si el push está activo, o {@code null} (no-op) si está apagado o mal configurado. */
     private FirebaseMessaging resolveMessaging() {
         if (!enabled) {
             LOGGER.debug("FCM disabled — skipping push");

@@ -18,14 +18,10 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Initializes Firebase for Cloud Messaging — only when {@code sidru.firebase.enabled=true}
- * AND the service-account file actually exists.
- *
- * <p>Boot-safe by design: if FCM is enabled but the credentials file is missing
- * ({@code @ConditionalOnResource} fails), this configuration is skipped, no
- * {@link FirebaseMessaging} bean is created, and {@code FcmNotificationAdapter} stays a
- * no-op — so the backend always starts, with or without Firebase configured. Real push is
- * delivered only when both the flag is on and the file is present.
+ * Inicializa Firebase (FCM) solo si {@code sidru.firebase.enabled=true} y el fichero de
+ * service-account existe. Si falta el fichero, {@code @ConditionalOnResource} salta esta
+ * config y no se crea el bean {@link FirebaseMessaging}: el backend arranca igual y el
+ * adapter queda no-op.
  */
 @Configuration
 @ConditionalOnProperty(name = "sidru.firebase.enabled", havingValue = "true")

@@ -13,20 +13,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Rate limiting for sensitive endpoints (RNF-07).
+ * Rate limiting de los endpoints de autenticación (RNF-07), por IP cliente.
  *
- * <p>Two protections, applied per client IP on the authentication endpoints:
- * <ul>
- *   <li><b>Request rate:</b> at most {@code maxPerMinute} requests per minute (fixed
- *       window). Excess requests get HTTP 429.</li>
- *   <li><b>Brute-force lockout:</b> after {@code maxAuthFailures} consecutive failed
- *       sign-ins (HTTP 401), the IP is blocked for {@code blockSeconds}; a successful
- *       sign-in resets the counter.</li>
- * </ul>
+ * Dos protecciones: máximo {@code maxPerMinute} peticiones por minuto (ventana fija, el
+ * exceso devuelve 429), y bloqueo por fuerza bruta tras {@code maxAuthFailures} sign-ins
+ * fallidos seguidos (401) durante {@code blockSeconds}; un sign-in correcto resetea el
+ * contador.
  *
- * <p>In-memory (single instance, MVP scope). For a multi-instance deployment this state
- * should move to a shared store (e.g. Redis). Instantiated directly in the security
- * filter chain — not a Spring bean — to avoid double servlet registration.
+ * Estado en memoria (una instancia, alcance MVP); en multi-instancia habría que moverlo a
+ * un store compartido tipo Redis. Se instancia directo en la cadena de filtros (no como
+ * bean) para evitar el doble registro del servlet.
  */
 public class RateLimitFilter extends OncePerRequestFilter {
 

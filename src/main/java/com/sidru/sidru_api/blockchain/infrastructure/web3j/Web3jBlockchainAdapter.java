@@ -19,25 +19,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 
 /**
- * Real Web3j implementation of the {@link BlockchainPort} outbound port.
+ * Web3j implementation of the {@link BlockchainPort} port. Resolves the citizen's custodial
+ * address, mints CTC via {@code recordAndReward} (1 point = 1 CTC = 10^18 wei) and persists a
+ * {@link BlockchainTransaction}. Honors {@code BLOCKCHAIN_ENABLED}, is idempotent per sessionId,
+ * retries transient RPC failures with backoff (RF-18) and never breaks the off-chain confirmation.
  *
- * <p>Resolves the citizen's custodial address, mints CTC via {@code recordAndReward}
- * (1 point = 1 CTC = 10^18 wei) and persists a {@link BlockchainTransaction}. Honors
- * {@code BLOCKCHAIN_ENABLED}, is idempotent per sessionId, retries transient RPC
- * failures with backoff (RF-18), and never breaks the off-chain session confirmation.
- *
- * <p>Confirmation strategy (E2E fix): the {@link TransactionReceipt} returned by
- * {@code recordAndReward} is itself proof of block inclusion, so on a status-OK receipt
- * the {@link BlockchainTransaction} is persisted with {@code confirmed=true} and a
- * best-effort FCM is fired here (US-39). The TokensMinted event listener remains as an
- * idempotent fallback: if it ever runs, the already-confirmed tx short-circuits it, so
- * there is no duplicate notification.
+ * Confirmation: the {@link TransactionReceipt} from {@code recordAndReward} already proves block
+ * inclusion, so on a status-OK receipt the tx is saved as {@code confirmed=true} and a best-effort
+ * FCM is fired here (US-39). The TokensMinted listener stays as an idempotent fallback: an
+ * already-confirmed tx short-circuits it, so there is no duplicate notification.
  */
 @Service
 public class Web3jBlockchainAdapter implements BlockchainPort {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Web3jBlockchainAdapter.class);
-    private static final String NETWORK = "polygon-amoy";
     private static final BigInteger WEI_PER_CTC = BigInteger.TEN.pow(18);
     private static final int MAX_ATTEMPTS = 3;
     private static final long BACKOFF_BASE_MILLIS = 500L;
@@ -82,12 +77,36 @@ public class Web3jBlockchainAdapter implements BlockchainPort {
         BigInteger amount = BigInteger.valueOf(session.getPointsEarned()).multiply(WEI_PER_CTC);
         byte[] qrHash = Hash.sha3(session.getQrToken().getBytes(StandardCharsets.UTF_8));
 
+        // On-chain idempotency pre-check (FREE eth_call, no gas). If this session was already
+        // recorded on-chain (e.g. a previous mint succeeded but its hash was never persisted
+        // locally), sending recordAndReward would only revert with "session already recorded"
+        // and burn POL. Self-heal instead: confirm idempotently and let reconciliation attach
+        // the marker. This is what stops the reconciliation job from re-minting already-recorded
+        // sessions every tick (the POL-drain bug). Mirrors the burn path's rewardRedeemed check.
+        try {
+            if (contract.sessionRecorded(sessionId)) {
+                LOGGER.info("Session {} already recorded on-chain — confirming without re-minting (no gas spent)",
+                        session.getId());
+                return handleAlreadyRecorded(session);
+            }
+        } catch (Exception ex) {
+            // Best-effort: if the pre-check itself fails (RPC hiccup), fall through to the normal
+            // mint path — the post-revert re-check below is the second safety net.
+            LOGGER.debug("sessionRecorded pre-check failed for session {} ({}); proceeding to mint",
+                    session.getId(), ex.getMessage());
+        }
+
         Exception lastError = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 TransactionReceipt receipt = contract.recordAndReward(address, sessionId, qrHash, amount);
                 if (receipt == null || !receipt.isStatusOK()) {
-                    // Mined but reverted (status != 0x1): treat as a failure, do not confirm.
+                    // Mined but reverted (status != 0x1). The usual cause is a concurrent mint that
+                    // already recorded this session: re-check on-chain and confirm idempotently
+                    // instead of retrying — further attempts would only revert again and burn POL.
+                    if (isRecordedOnChain(sessionId)) {
+                        return handleAlreadyRecorded(session);
+                    }
                     throw new IllegalStateException("recordAndReward receipt status not OK for session "
                             + session.getId());
                 }
@@ -135,7 +154,7 @@ public class Web3jBlockchainAdapter implements BlockchainPort {
                 session.getId(),
                 session.getUserId(),
                 txHash,
-                NETWORK,
+                properties.getNetworkLabel(),
                 confirmed,
                 "caps=" + session.getCapCount() + ";points=" + session.getPointsEarned());
         txRepository.save(bcTx);
@@ -167,6 +186,15 @@ public class Web3jBlockchainAdapter implements BlockchainPort {
     private boolean isAlreadyRecorded(Exception ex) {
         String msg = ex.getMessage();
         return msg != null && msg.toLowerCase().contains("session already recorded");
+    }
+
+    /** Best-effort on-chain idempotency re-check after a reverted mint; never throws. */
+    private boolean isRecordedOnChain(BigInteger sessionId) {
+        try {
+            return contract.sessionRecorded(sessionId);
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     private void backoff(int attempt) {

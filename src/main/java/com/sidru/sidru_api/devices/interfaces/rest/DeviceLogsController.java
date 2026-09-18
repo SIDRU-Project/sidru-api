@@ -29,7 +29,7 @@ public class DeviceLogsController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<DeviceLogResource>> getRecent(
             @RequestParam(required = false) String deviceCode) {
         var logs = (deviceCode == null || deviceCode.isBlank())

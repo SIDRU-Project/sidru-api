@@ -12,6 +12,7 @@ public enum SessionsErrorCatalog {
     INVALID_CAP_COUNT("ERR_SES_004", "Cap count is outside the allowed range"),
     UNAUTHORIZED_DEVICE("ERR_SES_005", "Smart Bin API key is invalid"),
     INVALID_SESSION_WEIGHT("ERR_SES_006", "Invalid session weight"),
+    INVALID_PAYLOAD("ERR_SES_007", "Session payload is invalid"),
     GENERIC_ERROR("ERR_SES_999", "An unexpected error occurred");
 
     private final String code;

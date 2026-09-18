@@ -24,8 +24,6 @@ import java.util.List;
 public class WalletQueryService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WalletQueryService.class);
-    private static final String NETWORK = "polygon-amoy";
-    private static final String EXPLORER_TX = "https://amoy.polygonscan.com/tx/";
     private static final BigDecimal WEI_PER_CTC = BigDecimal.TEN.pow(18);
     // points-per-sol = 100 -> 1 CTC ≈ S/ 0.01 (referential).
     private static final BigDecimal POINTS_PER_SOL = new BigDecimal("100");
@@ -61,7 +59,7 @@ public class WalletQueryService {
 
         return new WalletView(
                 address,
-                NETWORK,
+                properties.getNetworkLabel(),
                 balanceWei.toString(),
                 balanceCtc.toPlainString(),
                 solesRef.toPlainString(),
@@ -76,7 +74,7 @@ public class WalletQueryService {
                         "MINT",
                         tx.getTxHash(),
                         tx.isConfirmed() ? "CONFIRMED" : "PENDING",
-                        EXPLORER_TX + tx.getTxHash())));
+                        properties.explorerTxUrl(tx.getTxHash()))));
 
         withdrawalRepository.findTopByUserIdOrderByIdDesc(userId).ifPresent(w -> {
             if (w.getTxHash() != null) {
@@ -84,7 +82,7 @@ public class WalletQueryService {
                         "WITHDRAW",
                         w.getTxHash(),
                         w.getStatus().name(),
-                        EXPLORER_TX + w.getTxHash()));
+                        properties.explorerTxUrl(w.getTxHash())));
             }
         });
 

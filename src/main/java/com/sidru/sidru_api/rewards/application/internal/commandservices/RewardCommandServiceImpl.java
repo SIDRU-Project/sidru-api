@@ -68,8 +68,8 @@ public class RewardCommandServiceImpl implements RewardCommandService {
                         reward.getId(), reward.getName()));
 
         // Mirror the points deduction on-chain by burning CTC (best-effort, never breaks
-        // the off-chain redemption). Keyed by the unique point-transaction id. The hash is
-        // flushed onto the managed entity on commit (dirty checking), no second save needed.
+        // the redemption). Keyed by the tx id; the hash is flushed by dirty checking on
+        // commit, no second save needed.
         externalBlockchainService
                 .burnForRedemption(command.userId(), reward.getPointsCost(), tx.getId())
                 .ifPresent(tx::attachBlockchainTx);

@@ -6,6 +6,8 @@ import java.time.LocalDateTime;
 
 public record RecyclingSessionResource(
         Long id,
+        /** Fecha de registro de la sesion; es el criterio de orden del historial (CP016). */
+        LocalDateTime createdAt,
         Long smartBinId,
         Long userId,
         int capCount,
