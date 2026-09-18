@@ -22,10 +22,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Job de reconciliación de quemas fallidas (§ mejora de la quema). Verifica que: (1) con
- * blockchain deshabilitado no hace nada; (2) reintenta la quema de un REDEEM sin hash y
- * adjunta el hash; (3) deja la transacción para el próximo tick si la quema sigue fallando.
- * Todo mockeado (sin DB ni red).
+ * Job de reconciliación de quemas fallidas. Verifica que: (1) con blockchain deshabilitado
+ * no hace nada; (2) reintenta la quema de un REDEEM sin hash y adjunta el hash; (3) deja la
+ * transacción para el próximo tick si la quema sigue fallando. Todo mockeado (sin DB ni red).
  */
 class RewardBurnReconciliationServiceTest {
 

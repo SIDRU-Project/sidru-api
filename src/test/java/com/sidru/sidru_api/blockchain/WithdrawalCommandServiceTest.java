@@ -3,6 +3,8 @@ package com.sidru.sidru_api.blockchain;
 import com.sidru.sidru_api.blockchain.application.internal.commandservices.WithdrawalCommandService;
 import com.sidru.sidru_api.blockchain.application.internal.custodial.CustodialWalletService;
 import com.sidru.sidru_api.blockchain.domain.model.aggregates.WithdrawalRequest;
+import com.sidru.sidru_api.blockchain.domain.model.exceptions.InvalidWithdrawalAddressException;
+import com.sidru.sidru_api.blockchain.domain.model.exceptions.NoBalanceToWithdrawException;
 import com.sidru.sidru_api.blockchain.domain.model.exceptions.WithdrawalInProgressException;
 import com.sidru.sidru_api.blockchain.domain.model.valueobjects.WithdrawalStatus;
 import com.sidru.sidru_api.blockchain.infrastructure.persistence.jpa.repositories.WithdrawalRequestRepository;
@@ -86,5 +88,46 @@ class WithdrawalCommandServiceTest {
         verify(contract, times(1)).withdrawTo(eq(VALID_ADDR), eq(VALID_ADDR), any());
         assertEquals(WithdrawalStatus.COMPLETADO, result.getStatus());
         assertEquals("0xabc123", result.getTxHash());
+    }
+
+    @Test
+    void rechazaUnaDireccionInvalida() {
+        assertThrows(InvalidWithdrawalAddressException.class,
+                () -> service.withdraw(USER_ID, "0xNoEsUnaDireccion"));
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void rechazaSiNoHaySaldoQueRetirar() throws Exception {
+        when(repository.findByUserIdAndStatus(USER_ID, WithdrawalStatus.EN_PROCESO))
+                .thenReturn(List.of());
+        when(custodialWalletService.addressFor(USER_ID)).thenReturn(VALID_ADDR);
+        when(contract.balanceOf(VALID_ADDR)).thenReturn(BigInteger.ZERO);
+
+        assertThrows(NoBalanceToWithdrawException.class,
+                () -> service.withdraw(USER_ID, VALID_ADDR));
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void marcaFallidoSiLaTxOnChainLanza() throws Exception {
+        when(repository.findByUserIdAndStatus(USER_ID, WithdrawalStatus.EN_PROCESO))
+                .thenReturn(List.of());
+        when(custodialWalletService.addressFor(USER_ID)).thenReturn(VALID_ADDR);
+        when(contract.balanceOf(VALID_ADDR)).thenReturn(new BigInteger("500000000000000000000"));
+        when(repository.save(any(WithdrawalRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(contract.withdrawTo(eq(VALID_ADDR), eq(VALID_ADDR), any()))
+                .thenThrow(new RuntimeException("rpc down"));
+
+        WithdrawalRequest result = service.withdraw(USER_ID, VALID_ADDR);
+
+        assertEquals(WithdrawalStatus.FALLIDO, result.getStatus());
+    }
+
+    @Test
+    void lastStatusDevuelveElUltimoRetiroDelUsuario() {
+        WithdrawalRequest last = new WithdrawalRequest(USER_ID, VALID_ADDR, "1000");
+        when(repository.findTopByUserIdOrderByIdDesc(USER_ID)).thenReturn(java.util.Optional.of(last));
+        assertEquals(last, service.lastStatus(USER_ID));
     }
 }

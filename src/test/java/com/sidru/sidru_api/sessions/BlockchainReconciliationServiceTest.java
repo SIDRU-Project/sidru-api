@@ -22,10 +22,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Job de reconciliación de mints fallidos (§2.2). Verifica que: (1) con blockchain
- * deshabilitado no hace nada; (2) reintenta el mint de sesiones CONFIRMED sin tx y
- * adjunta el hash cuando {@code recordSession} responde; (3) deja la sesión para el
- * próximo tick si el mint sigue fallando. Todo mockeado (sin DB ni red).
+ * Job de reconciliación de mints fallidos. Verifica que: (1) con blockchain deshabilitado
+ * no hace nada; (2) reintenta el mint de sesiones CONFIRMED sin tx y adjunta el hash cuando
+ * recordSession responde; (3) deja la sesión para el próximo tick si el mint sigue fallando.
+ * Todo mockeado (sin DB ni red).
  */
 class BlockchainReconciliationServiceTest {
 

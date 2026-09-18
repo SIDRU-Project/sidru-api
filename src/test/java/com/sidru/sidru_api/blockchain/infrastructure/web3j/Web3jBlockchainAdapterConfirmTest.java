@@ -118,6 +118,28 @@ class Web3jBlockchainAdapterConfirmTest {
     }
 
     @Test
+    void recordSession_alreadyRecordedOnChain_confirmsWithoutMintingNorBurningGas() throws Exception {
+        // POL-drain fix: if the session is already recorded on-chain, the free sessionRecorded()
+        // pre-check must short-circuit BEFORE sending a recordAndReward tx (which would only
+        // revert with "session already recorded" and burn POL). It confirms idempotently instead.
+        when(properties.isEnabled()).thenReturn(true);
+        when(txRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.empty());
+        when(custodialWalletService.addressFor(USER_ID)).thenReturn(CUSTODIAL_ADDRESS);
+        when(contract.sessionRecorded(any())).thenReturn(true);
+
+        Optional<String> result = adapter.recordSession(session());
+
+        assertThat(result).isPresent();
+        // No gas-spending tx is ever sent.
+        verify(contract, never()).recordAndReward(anyString(), any(), any(), any());
+        // Confirmed marker persisted + citizen notified (US-39), exactly as a successful mint.
+        ArgumentCaptor<BlockchainTransaction> captor = ArgumentCaptor.forClass(BlockchainTransaction.class);
+        verify(txRepository).save(captor.capture());
+        assertThat(captor.getValue().isConfirmed()).isTrue();
+        verify(notificationContextFacade).notifyUser(eq(USER_ID), anyString(), anyString());
+    }
+
+    @Test
     void recordSession_revertedReceipt_doesNotConfirmNorNotify() throws Exception {
         when(properties.isEnabled()).thenReturn(true);
         when(txRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.empty());

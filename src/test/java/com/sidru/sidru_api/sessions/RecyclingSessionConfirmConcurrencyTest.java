@@ -28,15 +28,11 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * Canje único / anti-doble-canje (US-23). El handler de confirmación debe:
- * (1) leer la sesión con el finder de bloqueo PESIMISTA ({@code findByQrTokenForUpdate}),
- *     que serializa confirmaciones concurrentes sobre el mismo QR;
- * (2) rechazar con {@link InvalidSessionStateException} cualquier sesión que ya NO esté
- *     PENDING (la 2ª confirmación concurrente la lee CONFIRMED) sin volver a acreditar
- *     puntos ni mintear;
- * (3) en el camino feliz, acreditar puntos/caps, registrar en blockchain y publicar el
- *     evento de confirmación exactamente una vez.
- * Todo mockeado (sin DB ni red).
+ * Canje único / anti-doble-canje (US-23). El handler de confirmación debe: (1) leer con el
+ * finder de lock pesimista (findByQrTokenForUpdate), que serializa confirmaciones concurrentes
+ * del mismo QR; (2) rechazar con InvalidSessionStateException cualquier sesión que ya no esté
+ * PENDING sin re-acreditar puntos ni mintear; (3) en el camino feliz, acreditar puntos/caps,
+ * registrar en blockchain y publicar el evento una sola vez. Todo mockeado (sin DB ni red).
  */
 class RecyclingSessionConfirmConcurrencyTest {
 

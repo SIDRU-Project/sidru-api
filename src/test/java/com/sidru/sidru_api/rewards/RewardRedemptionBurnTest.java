@@ -29,12 +29,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Cableado del canje de recompensas con la quema on-chain de CTC (§2.1).
- *
- * <p>Verifica que: (1) un canje exitoso dispara {@code burnForRedemption} con
- * {@code (userId, pointsCost)} y adjunta el hash; (2) si la quema no está disponible
- * (blockchain off / fallo best-effort), el canje off-chain igual procede; (3) si no hay
- * puntos suficientes no se descuenta nada ni se intenta quemar. Todo mockeado (sin DB ni red).
+ * Canje de recompensas + quema on-chain de CTC. Verifica que: (1) un canje exitoso llama a
+ * burnForRedemption con (userId, pointsCost) y adjunta el hash; (2) si la quema no está
+ * disponible (blockchain off / fallo best-effort), el canje off-chain igual procede; (3) sin
+ * puntos suficientes no se descuenta ni se intenta quemar. Todo mockeado (sin DB ni red).
  */
 class RewardRedemptionBurnTest {
 

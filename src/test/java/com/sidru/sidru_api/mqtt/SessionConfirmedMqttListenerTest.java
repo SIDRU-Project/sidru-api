@@ -18,10 +18,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Unit tests (no DB, no broker) for {@link SessionConfirmedMqttListener} (US-IOT-05 / US-IOT-07).
- * Collaborators are mocked.
- */
+/** Tests unitarios (sin DB ni broker, colaboradores mockeados) de {@link SessionConfirmedMqttListener} (US-IOT-05 / US-IOT-07). */
 class SessionConfirmedMqttListenerTest {
 
     private static final Long SMART_BIN_ID = 1L;
