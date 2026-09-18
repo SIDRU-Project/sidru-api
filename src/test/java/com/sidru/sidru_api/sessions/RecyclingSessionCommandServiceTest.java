@@ -3,7 +3,6 @@ package com.sidru.sidru_api.sessions;
 import com.sidru.sidru_api.sessions.application.internal.commandservices.RecyclingSessionCommandServiceImpl;
 import com.sidru.sidru_api.sessions.application.internal.outboundservices.acl.ExternalDevicesService;
 import com.sidru.sidru_api.sessions.application.internal.outboundservices.acl.ExternalUserProfileService;
-import com.sidru.sidru_api.sessions.application.internal.outboundservices.blockchain.BlockchainPort;
 import com.sidru.sidru_api.sessions.domain.model.aggregates.RecyclingSession;
 import com.sidru.sidru_api.sessions.domain.model.commands.CancelRecyclingSessionCommand;
 import com.sidru.sidru_api.sessions.domain.model.commands.CreateRecyclingSessionCommand;
@@ -41,7 +40,6 @@ class RecyclingSessionCommandServiceTest {
     private RecyclingSessionRepository sessionRepository;
     private ExternalDevicesService externalDevicesService;
     private ExternalUserProfileService externalUserProfileService;
-    private BlockchainPort blockchainPort;
     private ApplicationEventPublisher eventPublisher;
     private RecyclingSessionCommandServiceImpl service;
 
@@ -50,11 +48,10 @@ class RecyclingSessionCommandServiceTest {
         sessionRepository = mock(RecyclingSessionRepository.class);
         externalDevicesService = mock(ExternalDevicesService.class);
         externalUserProfileService = mock(ExternalUserProfileService.class);
-        blockchainPort = mock(BlockchainPort.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new RecyclingSessionCommandServiceImpl(
                 sessionRepository, externalDevicesService, externalUserProfileService,
-                blockchainPort, eventPublisher);
+                eventPublisher);
         ReflectionTestUtils.setField(service, "pricePerKgSoles", 4.00);
         ReflectionTestUtils.setField(service, "pointsPerSol", 100);
         ReflectionTestUtils.setField(service, "minWeightGrams", 1.0);

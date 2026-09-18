@@ -1,20 +1,15 @@
 package com.sidru.sidru_api.cp;
 
 import com.sidru.sidru_api.iam.domain.model.valueobjects.Roles;
-import com.sidru.sidru_api.sessions.application.internal.outboundservices.blockchain.BlockchainPort;
 import com.sidru.sidru_api.sessions.domain.model.aggregates.RecyclingSession;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -29,9 +24,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @DisplayName("CP044 - Dashboard de metricas operativas y exportacion")
 class Cp044DashboardDeMetricasTest extends CpBaseTest {
-
-    @MockitoBean
-    private BlockchainPort blockchainPort;
 
     /** Siembra una sesion confirmada del ciudadano en el bin indicado. */
     private RecyclingSession confirmedSession(Long userId, Long binId, int caps, double grams, int points) {
@@ -136,8 +128,6 @@ class Cp044DashboardDeMetricasTest extends CpBaseTest {
     @Test
     @DisplayName("Paso 5: registrar una nueva sesion actualiza las metricas")
     void unaNuevaSesionActualizaLasMetricas() throws Exception {
-        when(blockchainPort.recordSession(any())).thenReturn(Optional.empty());
-
         var admin = newUser(Roles.ROLE_ADMIN.name());
         var citizen = newCitizen();
         var bin = newSmartBin();

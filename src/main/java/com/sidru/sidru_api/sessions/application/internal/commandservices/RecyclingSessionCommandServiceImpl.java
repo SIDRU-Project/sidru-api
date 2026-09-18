@@ -2,7 +2,6 @@ package com.sidru.sidru_api.sessions.application.internal.commandservices;
 
 import com.sidru.sidru_api.sessions.application.internal.outboundservices.acl.ExternalDevicesService;
 import com.sidru.sidru_api.sessions.application.internal.outboundservices.acl.ExternalUserProfileService;
-import com.sidru.sidru_api.sessions.application.internal.outboundservices.blockchain.BlockchainPort;
 import com.sidru.sidru_api.sessions.domain.model.aggregates.RecyclingSession;
 import com.sidru.sidru_api.sessions.domain.model.commands.CancelRecyclingSessionCommand;
 import com.sidru.sidru_api.sessions.domain.model.commands.ConfirmRecyclingSessionCommand;
@@ -25,7 +24,6 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
     private final RecyclingSessionRepository sessionRepository;
     private final ExternalDevicesService externalDevicesService;
     private final ExternalUserProfileService externalUserProfileService;
-    private final BlockchainPort blockchainPort;
     private final ApplicationEventPublisher eventPublisher;
 
     @Value("${sidru.recycling.price-per-kg-soles}")
@@ -52,12 +50,10 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
     public RecyclingSessionCommandServiceImpl(RecyclingSessionRepository sessionRepository,
                                               ExternalDevicesService externalDevicesService,
                                               ExternalUserProfileService externalUserProfileService,
-                                              BlockchainPort blockchainPort,
                                               ApplicationEventPublisher eventPublisher) {
         this.sessionRepository = sessionRepository;
         this.externalDevicesService = externalDevicesService;
         this.externalUserProfileService = externalUserProfileService;
-        this.blockchainPort = blockchainPort;
         this.eventPublisher = eventPublisher;
     }
 
@@ -119,9 +115,6 @@ public class RecyclingSessionCommandServiceImpl implements RecyclingSessionComma
 
         externalUserProfileService.addPointsAndCaps(
                 command.userId(), session.getPointsEarned(), session.getCapCount());
-
-        // no-op si la blockchain está deshabilitada
-        blockchainPort.recordSession(session).ifPresent(session::attachBlockchainTx);
 
         var saved = sessionRepository.save(session);
 

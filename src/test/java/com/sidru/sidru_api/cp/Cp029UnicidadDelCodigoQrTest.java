@@ -1,20 +1,15 @@
 package com.sidru.sidru_api.cp;
 
-import com.sidru.sidru_api.sessions.application.internal.outboundservices.blockchain.BlockchainPort;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -28,9 +23,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class Cp029UnicidadDelCodigoQrTest extends CpBaseTest {
 
     private static final int SESIONES = 50;
-
-    @MockitoBean
-    private BlockchainPort blockchainPort;
 
     @Test
     @DisplayName("Paso 1-3: 50 sesiones consecutivas generan 50 codigos distintos")
@@ -62,8 +54,6 @@ class Cp029UnicidadDelCodigoQrTest extends CpBaseTest {
     @Test
     @DisplayName("Paso 4: un codigo QR ya canjeado no puede reutilizarse")
     void unCodigoYaCanjeadoNoPuedeReutilizarse() throws Exception {
-        when(blockchainPort.recordSession(any())).thenReturn(Optional.empty());
-
         var citizen = newCitizen();
         var bin = newSmartBin();
         var session = openSession(bin, 20, 400.0);

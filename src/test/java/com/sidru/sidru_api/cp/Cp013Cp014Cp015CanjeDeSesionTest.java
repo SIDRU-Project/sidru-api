@@ -1,53 +1,41 @@
 package com.sidru.sidru_api.cp;
 
-import com.sidru.sidru_api.sessions.application.internal.outboundservices.blockchain.BlockchainPort;
 import com.sidru.sidru_api.sessions.domain.model.valueobjects.SessionStatus;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * CP013 / CP014 / CP015 — Canje de la sesion: confirmacion con emision de tokens, rechazo del
+ * CP013 / CP014 / CP015 — Canje de la sesion: confirmacion sin cadena, rechazo del
  * canje duplicado y rechazo del QR expirado.
  * HU: US-20 (esc. 2), US-23 (esc. 1 y 3) · Prioridad: Alta / Alta / Media
  *
- * <p>El puerto de blockchain se sustituye por un doble de prueba: el CP verifica el contrato
- * del backend (estado CONFIRMED, txHash propagado, saldo acreditado), no la red Amoy. La
- * verificacion del hash en el explorador es el paso manual de CP018/CP030.</p>
+ * <p>Desde US-MN-07 (emision al retirar) la confirmacion de sesion ya no toca la cadena:
+ * blockchainTxHash queda siempre null. El unico artefacto on-chain es el retiro.</p>
  */
 @DisplayName("CP013/CP014/CP015 - Canje de sesion")
 class Cp013Cp014Cp015CanjeDeSesionTest extends CpBaseTest {
 
-    private static final String TX_HASH =
-            "0x5f2c1a0d4e3b6c8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f";
-
-    @MockitoBean
-    private BlockchainPort blockchainPort;
-
     // ------------------------------------------------------------------ CP013
 
     @Test
-    @DisplayName("CP013 - Confirmacion: 200, status CONFIRMED, txHash en la respuesta y saldo acreditado")
+    @DisplayName("CP013 - Confirmacion: 200, status CONFIRMED, blockchainTxHash null y saldo acreditado")
     void confirmaElCanjeYAcreditaLosTokens() throws Exception {
-        when(blockchainPort.recordSession(any())).thenReturn(Optional.of(TX_HASH));
-
         var citizen = newCitizen();
         var bin = newSmartBin();
         var session = openSession(bin, 25, 500.0);
@@ -59,17 +47,17 @@ class Cp013Cp014Cp015CanjeDeSesionTest extends CpBaseTest {
                         .header("Authorization", citizen.bearer()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.blockchainTxHash").value(TX_HASH));
+                .andExpect(jsonPath("$.blockchainTxHash").value(nullValue()));
 
         // Paso 3 — El saldo del usuario se incrementa segun los tokens acreditados.
         int saldoFinal = userProfileRepository.findByUserId(citizen.id()).orElseThrow().getTotalPoints();
         assertEquals(saldoInicial + session.getPointsEarned(), saldoFinal);
 
-        // Paso 4 (equivalente automatizable) — el txHash queda persistido para su trazabilidad
-        // en el explorador; la consulta en Polygonscan es el paso manual de CP018/CP030.
+        // Paso 4 — Confirmar una sesion no toca la cadena (US-MN-07): sin txHash que verificar
+        // en el explorador. El unico artefacto on-chain pasa a ser el retiro (Fase 3).
         var reloaded = sessionRepository.findByQrToken(session.getQrToken()).orElseThrow();
         assertEquals(SessionStatus.CONFIRMED, reloaded.getStatus());
-        assertEquals(TX_HASH, reloaded.getBlockchainTxHash());
+        assertNull(reloaded.getBlockchainTxHash());
         assertNotNull(reloaded.getConfirmedAt());
         assertEquals(citizen.id(), reloaded.getUserId());
     }
@@ -79,8 +67,6 @@ class Cp013Cp014Cp015CanjeDeSesionTest extends CpBaseTest {
     @Test
     @DisplayName("CP014 - Segundo canje de una sesion CONFIRMED: 409 y sin cambios de estado ni saldo")
     void rechazaElCanjeDuplicado() throws Exception {
-        when(blockchainPort.recordSession(any())).thenReturn(Optional.of(TX_HASH));
-
         var citizen = newCitizen();
         var bin = newSmartBin();
         var session = openSession(bin, 25, 500.0);
@@ -109,8 +95,6 @@ class Cp013Cp014Cp015CanjeDeSesionTest extends CpBaseTest {
     @Test
     @DisplayName("CP014 - Dos confirmaciones concurrentes del mismo QR: solo una prospera")
     void soloUnaDeDosConfirmacionesConcurrentesProspera() throws Exception {
-        when(blockchainPort.recordSession(any())).thenReturn(Optional.of(TX_HASH));
-
         var citizen = newCitizen();
         var bin = newSmartBin();
         var session = openSession(bin, 25, 500.0);

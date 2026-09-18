@@ -3,7 +3,6 @@ package com.sidru.sidru_api.sessions;
 import com.sidru.sidru_api.sessions.application.internal.commandservices.RecyclingSessionCommandServiceImpl;
 import com.sidru.sidru_api.sessions.application.internal.outboundservices.acl.ExternalDevicesService;
 import com.sidru.sidru_api.sessions.application.internal.outboundservices.acl.ExternalUserProfileService;
-import com.sidru.sidru_api.sessions.application.internal.outboundservices.blockchain.BlockchainPort;
 import com.sidru.sidru_api.sessions.domain.model.aggregates.RecyclingSession;
 import com.sidru.sidru_api.sessions.domain.model.commands.ConfirmRecyclingSessionCommand;
 import com.sidru.sidru_api.sessions.domain.model.exceptions.InvalidSessionStateException;
@@ -31,15 +30,14 @@ import static org.mockito.Mockito.when;
  * Canje único / anti-doble-canje (US-23). El handler de confirmación debe: (1) leer con el
  * finder de lock pesimista (findByQrTokenForUpdate), que serializa confirmaciones concurrentes
  * del mismo QR; (2) rechazar con InvalidSessionStateException cualquier sesión que ya no esté
- * PENDING sin re-acreditar puntos ni mintear; (3) en el camino feliz, acreditar puntos/caps,
- * registrar en blockchain y publicar el evento una sola vez. Todo mockeado (sin DB ni red).
+ * PENDING sin re-acreditar puntos; (3) en el camino feliz, acreditar puntos/caps y publicar
+ * el evento una sola vez. Todo mockeado (sin DB ni red).
  */
 class RecyclingSessionConfirmConcurrencyTest {
 
     private RecyclingSessionRepository sessionRepository;
     private ExternalDevicesService externalDevicesService;
     private ExternalUserProfileService externalUserProfileService;
-    private BlockchainPort blockchainPort;
     private ApplicationEventPublisher eventPublisher;
     private RecyclingSessionCommandServiceImpl service;
 
@@ -48,11 +46,10 @@ class RecyclingSessionConfirmConcurrencyTest {
         sessionRepository = mock(RecyclingSessionRepository.class);
         externalDevicesService = mock(ExternalDevicesService.class);
         externalUserProfileService = mock(ExternalUserProfileService.class);
-        blockchainPort = mock(BlockchainPort.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
         service = new RecyclingSessionCommandServiceImpl(
                 sessionRepository, externalDevicesService, externalUserProfileService,
-                blockchainPort, eventPublisher);
+                eventPublisher);
     }
 
     private RecyclingSession pendingSession() {
@@ -64,7 +61,6 @@ class RecyclingSessionConfirmConcurrencyTest {
         var session = pendingSession();
         when(sessionRepository.findByQrTokenForUpdate(session.getQrToken()))
                 .thenReturn(Optional.of(session));
-        when(blockchainPort.recordSession(session)).thenReturn(Optional.of("0xabc"));
         when(sessionRepository.save(session)).thenReturn(session);
 
         var result = service.handle(new ConfirmRecyclingSessionCommand(session.getQrToken(), 6L));
@@ -92,9 +88,8 @@ class RecyclingSessionConfirmConcurrencyTest {
         var cmd = new ConfirmRecyclingSessionCommand(session.getQrToken(), 7L);
         assertThrows(InvalidSessionStateException.class, () -> service.handle(cmd));
 
-        // No vuelve a acreditar puntos/caps, ni mintea, ni publica el evento.
-        verifyNoInteractions(externalDevicesService, externalUserProfileService,
-                blockchainPort, eventPublisher);
+        // No vuelve a acreditar puntos/caps ni publica el evento.
+        verifyNoInteractions(externalDevicesService, externalUserProfileService, eventPublisher);
         verify(sessionRepository, never()).save(any());
     }
 }

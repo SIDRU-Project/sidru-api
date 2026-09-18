@@ -1,6 +1,5 @@
 package com.sidru.sidru_api.rewards.application.internal.commandservices;
 
-import com.sidru.sidru_api.rewards.application.internal.outboundservices.acl.ExternalBlockchainService;
 import com.sidru.sidru_api.rewards.application.internal.outboundservices.acl.ExternalUserProfileService;
 import com.sidru.sidru_api.rewards.domain.model.aggregates.PointTransaction;
 import com.sidru.sidru_api.rewards.domain.model.aggregates.Reward;
@@ -23,16 +22,13 @@ public class RewardCommandServiceImpl implements RewardCommandService {
     private final RewardRepository rewardRepository;
     private final PointTransactionRepository transactionRepository;
     private final ExternalUserProfileService externalUserProfileService;
-    private final ExternalBlockchainService externalBlockchainService;
 
     public RewardCommandServiceImpl(RewardRepository rewardRepository,
                                     PointTransactionRepository transactionRepository,
-                                    ExternalUserProfileService externalUserProfileService,
-                                    ExternalBlockchainService externalBlockchainService) {
+                                    ExternalUserProfileService externalUserProfileService) {
         this.rewardRepository = rewardRepository;
         this.transactionRepository = transactionRepository;
         this.externalUserProfileService = externalUserProfileService;
-        this.externalBlockchainService = externalBlockchainService;
     }
 
     @Override
@@ -66,13 +62,6 @@ public class RewardCommandServiceImpl implements RewardCommandService {
         var tx = transactionRepository.save(
                 PointTransaction.redeem(command.userId(), reward.getPointsCost(),
                         reward.getId(), reward.getName()));
-
-        // Mirror the points deduction on-chain by burning CTC (best-effort, never breaks
-        // the redemption). Keyed by the tx id; the hash is flushed by dirty checking on
-        // commit, no second save needed.
-        externalBlockchainService
-                .burnForRedemption(command.userId(), reward.getPointsCost(), tx.getId())
-                .ifPresent(tx::attachBlockchainTx);
 
         return Optional.of(tx);
     }
