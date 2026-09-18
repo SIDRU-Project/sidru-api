@@ -57,15 +57,31 @@ class WithdrawalReconciliationServiceTest {
         when(repository.save(any(WithdrawalRequest.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
+    // chainWithdrawalId = id + 1000, deliberadamente distinto del id de BD: si el servicio
+    // volviera a usar request.getId() para consultar la cadena, estos stubs no matchearian.
     private WithdrawalRequest requestConId(long id) {
+        return requestConId(id, id + 1000);
+    }
+
+    private WithdrawalRequest requestConId(long id, long chainWithdrawalId) {
         WithdrawalRequest request =
                 new WithdrawalRequest(7L, ADDR, 800, "800000000000000000000", WithdrawalMode.CTC);
         request.setId(id);
+        request.setChainWithdrawalId(chainWithdrawalId);
+        return request;
+    }
+
+    /** Fila anterior a la migracion: sin chainWithdrawalId. */
+    private WithdrawalRequest requestConIdSinChainWithdrawalId(long id) {
+        WithdrawalRequest request =
+                new WithdrawalRequest(7L, ADDR, 800, "800000000000000000000", WithdrawalMode.CTC);
+        request.setId(id);
+        request.setChainWithdrawalId(null);
         return request;
     }
 
     private void stubCandidates(WithdrawalRequest... requests) {
-        when(repository.findTop50ByStatusAndUpdatedAtBeforeOrderByIdAsc(
+        when(repository.findTop50ByStatusAndUpdatedAtLessThanEqualOrderByIdAsc(
                 eq(WithdrawalStatus.EN_PROCESO), any(LocalDateTime.class)))
                 .thenReturn(List.of(requests));
     }
@@ -74,12 +90,12 @@ class WithdrawalReconciliationServiceTest {
     void withdrawalProcessedTrueCompletaDesdeLaCadenaYNotificaSegunElModo() throws Exception {
         WithdrawalRequest request = requestConId(10L);
         stubCandidates(request);
-        when(contract.withdrawalProcessed(BigInteger.valueOf(10L))).thenReturn(true);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(1010L))).thenReturn(true);
 
         service.reconcile();
 
         assertEquals(WithdrawalStatus.COMPLETADO, request.getStatus());
-        assertEquals("recorded:10", request.getTxHash());
+        assertEquals("recorded:1010", request.getTxHash());
         verify(notifier).notifyCompleted(request);
         verify(repository).save(request);
         verify(withdrawalCommandService, never()).submit(any());
@@ -89,7 +105,7 @@ class WithdrawalReconciliationServiceTest {
     void attemptsMenorQueMaxReintentaViaSubmit() throws Exception {
         WithdrawalRequest request = requestConId(11L); // attempts = 0 < max 3
         stubCandidates(request);
-        when(contract.withdrawalProcessed(BigInteger.valueOf(11L))).thenReturn(false);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(1011L))).thenReturn(false);
 
         service.reconcile();
 
@@ -105,7 +121,7 @@ class WithdrawalReconciliationServiceTest {
         request.markAttempt();
         request.markAttempt(); // attempts = 3 == max: se agotó el presupuesto
         stubCandidates(request);
-        when(contract.withdrawalProcessed(BigInteger.valueOf(12L))).thenReturn(false);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(1012L))).thenReturn(false);
 
         service.reconcile();
 
@@ -120,11 +136,42 @@ class WithdrawalReconciliationServiceTest {
     void unFalloDelEthCallDeWithdrawalProcessedNoRevientaElJob() throws Exception {
         WithdrawalRequest request = requestConId(13L); // attempts = 0 < max
         stubCandidates(request);
-        when(contract.withdrawalProcessed(BigInteger.valueOf(13L))).thenThrow(new IOException("rpc down"));
+        when(contract.withdrawalProcessed(BigInteger.valueOf(1013L))).thenThrow(new IOException("rpc down"));
 
         service.reconcile();
 
         // El fallo del eth_call se trata como "no confirmado todavia": sigue el flujo normal.
         verify(withdrawalCommandService).submit(request);
+    }
+
+    @Test
+    void chainWithdrawalIdNuloNoConsultaLaCadenaNiReenviaYQuedaEnProceso() throws Exception {
+        // Fila anterior al campo chain_withdrawal_id: no hay id de cadena que consultar ni que
+        // reenviar (reenviar reventaria con NPE al construir el BigInteger). Requiere
+        // intervencion manual, asi que no se toca ni el contrato ni el estado de la fila.
+        WithdrawalRequest request = requestConIdSinChainWithdrawalId(14L); // attempts = 0 < max
+        stubCandidates(request);
+
+        service.reconcile();
+
+        verifyNoInteractions(contract);
+        verify(withdrawalCommandService, never()).submit(any());
+        assertEquals(WithdrawalStatus.EN_PROCESO, request.getStatus());
+    }
+
+    @Test
+    void unaFilaQueFallaAlReconciliarNoImpideQueSeProcesenLasDemas() throws Exception {
+        WithdrawalRequest rota = requestConId(15L); // attempts = 0 < max
+        WithdrawalRequest sana = requestConId(16L); // attempts = 0 < max
+        stubCandidates(rota, sana);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(1015L))).thenReturn(false);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(1016L))).thenReturn(false);
+        doThrow(new RuntimeException("fallo inesperado"))
+                .when(withdrawalCommandService).submit(rota);
+
+        service.reconcile();
+
+        verify(withdrawalCommandService).submit(rota);
+        verify(withdrawalCommandService).submit(sana);
     }
 }

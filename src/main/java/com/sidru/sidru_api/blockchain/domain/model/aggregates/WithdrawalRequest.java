@@ -1,5 +1,6 @@
 package com.sidru.sidru_api.blockchain.domain.model.aggregates;
 
+import com.sidru.sidru_api.blockchain.domain.model.valueobjects.ChainWithdrawalIds;
 import com.sidru.sidru_api.blockchain.domain.model.valueobjects.WithdrawalMode;
 import com.sidru.sidru_api.blockchain.domain.model.valueobjects.WithdrawalStatus;
 import com.sidru.sidru_api.shared.domain.model.aggregates.AuditableAbstractAggregateRoot;
@@ -11,8 +12,10 @@ import java.time.LocalDateTime;
 
 /**
  * Aggregate tracking a citizen's request to withdraw app points to CTC (mint) or USDC
- * (reserve payout). Persisted status enforces idempotency (RN-BC-07): the id IS the
- * on-chain withdrawalId shared by mintWithdrawal/payoutReserve.
+ * (reserve payout). Persisted status enforces idempotency (RN-BC-07): the on-chain
+ * withdrawalId shared by mintWithdrawal/payoutReserve is {@link #chainWithdrawalId},
+ * a random id independent of this row's own DB id (two databases against the same
+ * contract must never collide).
  */
 @Getter
 @Setter
@@ -61,6 +64,14 @@ public class WithdrawalRequest extends AuditableAbstractAggregateRoot<Withdrawal
     @Column(name = "reserve_out", length = 100)
     private String reserveOut;
 
+    /**
+     * withdrawalId enviado a mintWithdrawal/payoutReserve. Nullable a propósito: ddl-auto=update
+     * no puede añadir una columna NOT NULL con filas existentes, y todas las filas anteriores a
+     * este campo ya están en estado final.
+     */
+    @Column(name = "chain_withdrawal_id", unique = true)
+    private Long chainWithdrawalId;
+
     public WithdrawalRequest() {}
 
     public WithdrawalRequest(Long userId, String toAddress, int points, String amountWei, WithdrawalMode mode) {
@@ -71,6 +82,7 @@ public class WithdrawalRequest extends AuditableAbstractAggregateRoot<Withdrawal
         this.mode = mode;
         this.status = WithdrawalStatus.EN_PROCESO;
         this.attempts = 0;
+        this.chainWithdrawalId = ChainWithdrawalIds.next();
     }
 
     /** Un envio real a la cadena (no cuenta cuando el motivo es InsufficientReserve). */

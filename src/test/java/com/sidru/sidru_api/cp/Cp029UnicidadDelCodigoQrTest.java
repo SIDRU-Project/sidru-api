@@ -135,7 +135,7 @@ class Cp029UnicidadDelCodigoQrTest extends CpBaseTest {
 
         var completed = withdrawalRequestRepository.findById(id).orElseThrow();
         assertEquals(WithdrawalStatus.COMPLETADO, completed.getStatus());
-        assertEquals("recorded:" + id, completed.getTxHash());
+        assertEquals("recorded:" + completed.getChainWithdrawalId(), completed.getTxHash());
         assertEquals(1, withdrawalRequestRepository.findByUserIdAndStatus(citizen.id(), WithdrawalStatus.COMPLETADO)
                 .size(), "un solo retiro COMPLETADO para este withdrawalId, no dos");
     }

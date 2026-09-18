@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 public record WithdrawalStatusResource(
         Long id,
+        String chainWithdrawalId,
         String mode,
         int points,
         String amountWei,

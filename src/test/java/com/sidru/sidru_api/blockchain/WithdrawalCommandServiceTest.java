@@ -30,9 +30,11 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
@@ -50,6 +52,10 @@ class WithdrawalCommandServiceTest {
     private static final Long USER_ID = 99L;
     private static final String VALID_ADDR = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
     private static final int POINTS = 800;
+    // Deliberadamente distinto del id de BD (1L) que usan la mayoria de los tests: si algun
+    // codigo volviera a usar request.getId() en vez de getChainWithdrawalId(), estas
+    // aserciones lo detectarian.
+    private static final long CHAIN_WITHDRAWAL_ID = 555L;
 
     private UserProfileContextFacade userProfileContextFacade;
     private ChapaTuCriptoContract contract;
@@ -93,10 +99,15 @@ class WithdrawalCommandServiceTest {
     }
 
     private WithdrawalRequest newRequest(WithdrawalMode mode) {
+        return newRequest(mode, 1L, CHAIN_WITHDRAWAL_ID);
+    }
+
+    private WithdrawalRequest newRequest(WithdrawalMode mode, long id, long chainWithdrawalId) {
         BigInteger amountWei = BigInteger.valueOf(POINTS).multiply(BigInteger.TEN.pow(18));
         WithdrawalRequest request =
                 new WithdrawalRequest(USER_ID, VALID_ADDR, POINTS, amountWei.toString(), mode);
-        request.setId(1L);
+        request.setId(id);
+        request.setChainWithdrawalId(chainWithdrawalId);
         return request;
     }
 
@@ -164,7 +175,7 @@ class WithdrawalCommandServiceTest {
         WithdrawalRequest request = newRequest(WithdrawalMode.CTC);
         TransactionReceipt receipt = mock(TransactionReceipt.class);
         when(receipt.getTransactionHash()).thenReturn("0xabc123");
-        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(1L)), any()))
+        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(CHAIN_WITHDRAWAL_ID)), any()))
                 .thenReturn(receipt);
 
         service.submit(request);
@@ -183,7 +194,7 @@ class WithdrawalCommandServiceTest {
         WithdrawalRequest request = newRequest(WithdrawalMode.USDC);
         TransactionReceipt receipt = mock(TransactionReceipt.class);
         when(receipt.getTransactionHash()).thenReturn("0xdef456");
-        when(contract.payoutReserve(eq(VALID_ADDR), eq(BigInteger.valueOf(1L)), any()))
+        when(contract.payoutReserve(eq(VALID_ADDR), eq(BigInteger.valueOf(CHAIN_WITHDRAWAL_ID)), any()))
                 .thenReturn(receipt);
         when(contract.decodeReserveOut(receipt)).thenReturn(BigInteger.valueOf(2_777_777L));
 
@@ -204,7 +215,7 @@ class WithdrawalCommandServiceTest {
         service.submit(request);
 
         assertEquals(WithdrawalStatus.COMPLETADO, request.getStatus());
-        assertEquals("recorded:1", request.getTxHash());
+        assertEquals("recorded:" + CHAIN_WITHDRAWAL_ID, request.getTxHash());
         assertEquals(1, request.getAttempts());
         verify(notifier).notifyCompleted(request);
         verify(userProfileContextFacade, never()).refundPoints(any(), anyInt());
@@ -276,34 +287,64 @@ class WithdrawalCommandServiceTest {
     void refundPointsSoloSeLlamaEnElFalloDefinitivo() throws Exception {
         // Recorre las cuatro ramas de error de submit() y confirma que refundPoints
         // (Mockito, conteo exacto) solo se invoca en la del revert con motivo.
-        WithdrawalRequest alreadyProcessed = newRequest(WithdrawalMode.CTC);
+        WithdrawalRequest alreadyProcessed = newRequest(WithdrawalMode.CTC, 1L, 501L);
         Exception ap = new ContractRevertException("x");
-        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(1L)), any())).thenThrow(ap);
+        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(501L)), any())).thenThrow(ap);
         when(contract.isWithdrawalAlreadyProcessed(ap)).thenReturn(true);
         service.submit(alreadyProcessed);
 
-        WithdrawalRequest insufficientReserve = newRequest(WithdrawalMode.CTC);
-        insufficientReserve.setId(2L);
+        WithdrawalRequest insufficientReserve = newRequest(WithdrawalMode.CTC, 2L, 502L);
         Exception ir = new ContractRevertException("y");
-        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(2L)), any())).thenThrow(ir);
+        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(502L)), any())).thenThrow(ir);
         when(contract.isInsufficientReserve(ir)).thenReturn(true);
         service.submit(insufficientReserve);
 
-        WithdrawalRequest ioFailure = newRequest(WithdrawalMode.CTC);
-        ioFailure.setId(3L);
-        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(3L)), any()))
+        WithdrawalRequest ioFailure = newRequest(WithdrawalMode.CTC, 3L, 503L);
+        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(503L)), any()))
                 .thenThrow(new IOException("timeout"));
         service.submit(ioFailure);
 
         verify(userProfileContextFacade, never()).refundPoints(any(), anyInt());
 
-        WithdrawalRequest deterministic = newRequest(WithdrawalMode.CTC);
-        deterministic.setId(4L);
-        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(4L)), any()))
+        WithdrawalRequest deterministic = newRequest(WithdrawalMode.CTC, 4L, 504L);
+        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(504L)), any()))
                 .thenThrow(new ContractRevertException("0xotromotivo"));
         service.submit(deterministic);
 
         verify(userProfileContextFacade, times(1)).refundPoints(USER_ID, POINTS);
+    }
+
+    // ------------------------------------------------------------ chainWithdrawalId
+
+    @Test
+    void submitUsaElChainWithdrawalIdYNoElIdDeBd() throws Exception {
+        // id de BD y chainWithdrawalId son deliberadamente distintos (1L vs CHAIN_WITHDRAWAL_ID):
+        // si submit() volviera a usar request.getId(), este stub no matchearia y el test fallaria.
+        WithdrawalRequest request = newRequest(WithdrawalMode.CTC);
+        TransactionReceipt receipt = mock(TransactionReceipt.class);
+        when(receipt.getTransactionHash()).thenReturn("0xabc123");
+        when(contract.mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(CHAIN_WITHDRAWAL_ID)), any()))
+                .thenReturn(receipt);
+
+        service.submit(request);
+
+        assertEquals(WithdrawalStatus.COMPLETADO, request.getStatus());
+        verify(contract, never()).mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(request.getId())), any());
+    }
+
+    @Test
+    void chainWithdrawalIdEsAleatorioPositivoYUnicoPorInstancia() {
+        BigInteger amountWei = BigInteger.valueOf(POINTS).multiply(BigInteger.TEN.pow(18));
+        WithdrawalRequest a =
+                new WithdrawalRequest(USER_ID, VALID_ADDR, POINTS, amountWei.toString(), WithdrawalMode.CTC);
+        WithdrawalRequest b =
+                new WithdrawalRequest(USER_ID, VALID_ADDR, POINTS, amountWei.toString(), WithdrawalMode.CTC);
+
+        assertNotNull(a.getChainWithdrawalId());
+        assertNotNull(b.getChainWithdrawalId());
+        assertTrue(a.getChainWithdrawalId() > 0);
+        assertTrue(b.getChainWithdrawalId() > 0);
+        assertNotEquals(a.getChainWithdrawalId(), b.getChainWithdrawalId());
     }
 
     // ------------------------------------------------------------ getById / lastStatus

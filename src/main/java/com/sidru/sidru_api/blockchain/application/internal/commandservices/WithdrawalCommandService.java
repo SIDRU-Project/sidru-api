@@ -126,7 +126,7 @@ public class WithdrawalCommandService {
      * por {@code WithdrawalReconciliationService} (design.md §5, paso 3).
      */
     public void submit(WithdrawalRequest request) {
-        BigInteger withdrawalId = BigInteger.valueOf(request.getId());
+        BigInteger withdrawalId = BigInteger.valueOf(request.getChainWithdrawalId());
         BigInteger amount = new BigInteger(request.getAmountWei());
         try {
             TransactionReceipt receipt = request.getMode() == WithdrawalMode.CTC
@@ -144,21 +144,21 @@ public class WithdrawalCommandService {
         } catch (Exception ex) {
             if (contract.isWithdrawalAlreadyProcessed(ex)) {
                 request.markAttempt();
-                request.completeFromChain(request.getId());
+                request.completeFromChain(request.getChainWithdrawalId());
                 notifier.notifyCompleted(request);
             } else if (contract.isInsufficientReserve(ex)) {
                 // Regla explícita (design.md §4): no consume el presupuesto de intentos ni
                 // dispara refund. Es un problema del operador (recargar reserva), no del retiro.
-                LOGGER.warn("Reserva insuficiente para completar el retiro {}: {}",
-                        request.getId(), ex.getMessage());
+                LOGGER.warn("Reserva insuficiente para completar el retiro {} (chainId {}): {}",
+                        request.getId(), request.getChainWithdrawalId(), ex.getMessage());
             } else if (ex instanceof ContractRevertException cre && cre.getRevertReason() == null) {
                 // No pudimos obtener el motivo del revert (el nodo no devolvió revert data).
                 // Podría ser InsufficientReserve sin dato: cerrar en falso un retiro que solo
                 // esperaba recarga sería peor que reintentar. La reconciliación lo resuelve
                 // via withdrawalProcessed(id) o lo lleva a FALLIDO al agotar los intentos.
                 request.markAttempt();
-                LOGGER.warn("Revert sin motivo disponible para el retiro {}, se reintentará",
-                        request.getId());
+                LOGGER.warn("Revert sin motivo disponible para el retiro {} (chainId {}), se reintentará",
+                        request.getId(), request.getChainWithdrawalId());
             } else if (ex instanceof ContractRevertException) {
                 // Revert con motivo distinto de los dos selectores conocidos: determinista, no
                 // tiene sentido reintentar (el mismo estado on-chain revierte siempre igual).
@@ -170,8 +170,8 @@ public class WithdrawalCommandService {
             } else {
                 // RPC/red/timeout: reintentable, la reconciliación lo retoma.
                 request.markAttempt();
-                LOGGER.warn("Envío on-chain del retiro {} falló, se reintentará: {}",
-                        request.getId(), ex.getMessage());
+                LOGGER.warn("Envío on-chain del retiro {} (chainId {}) falló, se reintentará: {}",
+                        request.getId(), request.getChainWithdrawalId(), ex.getMessage());
             }
         }
         repository.save(request);

@@ -54,15 +54,28 @@ public class WithdrawalReconciliationService {
         LocalDateTime threshold = LocalDateTime.now()
                 .minusSeconds(withdrawalProperties.getReconciliation().getGraceSeconds());
         List<WithdrawalRequest> candidates = repository
-                .findTop50ByStatusAndUpdatedAtBeforeOrderByIdAsc(WithdrawalStatus.EN_PROCESO, threshold);
+                .findTop50ByStatusAndUpdatedAtLessThanEqualOrderByIdAsc(WithdrawalStatus.EN_PROCESO, threshold);
         for (WithdrawalRequest request : candidates) {
-            reconcileOne(request);
+            try {
+                reconcileOne(request);
+            } catch (Exception ex) {
+                // Una fila rota no debe cortar el tick para las demas.
+                LOGGER.error("Reconciliación del retiro {} falló: {}", request.getId(), ex.getMessage());
+            }
         }
     }
 
     private void reconcileOne(WithdrawalRequest request) {
-        if (isAlreadyProcessedOnChain(request)) {
-            request.completeFromChain(request.getId());
+        Long chainWithdrawalId = request.getChainWithdrawalId();
+        if (chainWithdrawalId == null) {
+            // Fila anterior a este campo: ni hay id de cadena que consultar ni uno que reenviar
+            // (reenviar reventaria con NPE al construir el BigInteger). Requiere intervencion manual.
+            LOGGER.warn("Retiro {} sin chainWithdrawalId: requiere intervención manual", request.getId());
+            return;
+        }
+
+        if (isAlreadyProcessedOnChain(chainWithdrawalId)) {
+            request.completeFromChain(chainWithdrawalId);
             repository.save(request);
             notifier.notifyCompleted(request);
             return;
@@ -79,12 +92,12 @@ public class WithdrawalReconciliationService {
         }
     }
 
-    private boolean isAlreadyProcessedOnChain(WithdrawalRequest request) {
+    private boolean isAlreadyProcessedOnChain(long chainWithdrawalId) {
         try {
-            return contract.withdrawalProcessed(BigInteger.valueOf(request.getId()));
+            return contract.withdrawalProcessed(BigInteger.valueOf(chainWithdrawalId));
         } catch (Exception ex) {
             LOGGER.warn("No se pudo consultar withdrawalProcessed({}): {}",
-                    request.getId(), ex.getMessage());
+                    chainWithdrawalId, ex.getMessage());
             return false;
         }
     }

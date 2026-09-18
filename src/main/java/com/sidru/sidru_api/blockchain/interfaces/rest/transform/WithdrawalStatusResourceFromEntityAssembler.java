@@ -22,6 +22,7 @@ public class WithdrawalStatusResourceFromEntityAssembler {
     public WithdrawalStatusResource toResourceFromEntity(WithdrawalRequest entity) {
         return new WithdrawalStatusResource(
                 entity.getId(),
+                entity.getChainWithdrawalId() == null ? null : entity.getChainWithdrawalId().toString(),
                 entity.getMode().name(),
                 entity.getPoints(),
                 entity.getAmountWei(),

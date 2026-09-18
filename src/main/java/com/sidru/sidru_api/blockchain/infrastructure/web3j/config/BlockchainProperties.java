@@ -95,9 +95,12 @@ public class BlockchainProperties {
         this.reserveAlertBps = reserveAlertBps;
     }
 
-    /** URL del explorador para una transaccion concreta. */
+    /**
+     * URL del explorador para una transaccion concreta. Null si no hay txHash real
+     * (por ejemplo "recorded:&lt;chainWithdrawalId&gt;", que no es un hash de transaccion).
+     */
     public String explorerTxUrl(String txHash) {
-        if (txHash == null || explorerBaseUrl == null) return null;
+        if (txHash == null || !txHash.startsWith("0x") || explorerBaseUrl == null) return null;
         String base = explorerBaseUrl.endsWith("/")
                 ? explorerBaseUrl.substring(0, explorerBaseUrl.length() - 1)
                 : explorerBaseUrl;

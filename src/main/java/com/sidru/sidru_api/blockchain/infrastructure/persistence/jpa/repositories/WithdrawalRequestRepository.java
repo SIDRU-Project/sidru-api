@@ -20,9 +20,14 @@ public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalReq
     /** Historial completo del usuario, del mas reciente al mas antiguo (GET /wallet/me/withdrawals). */
     List<WithdrawalRequest> findAllByUserIdOrderByIdDesc(Long userId);
 
-    /** Candidatos a reconciliar: los EN_PROCESO mas antiguos primero, tope 50 por corrida. */
-    List<WithdrawalRequest> findTop50ByStatusAndUpdatedAtBeforeOrderByIdAsc(
-            WithdrawalStatus status, LocalDateTime updatedAtBefore);
+    /**
+     * Candidatos a reconciliar: los EN_PROCESO mas antiguos primero, tope 50 por corrida. El
+     * umbral es inclusivo ({@code <=}), no estricto: "al menos grace-seconds de antiguedad"
+     * incluye una fila actualizada justo en el instante del umbral (con grace-seconds=0, el
+     * mismo tick de reloj en que se guardo el intento fallido no debe dejarla fuera del lote).
+     */
+    List<WithdrawalRequest> findTop50ByStatusAndUpdatedAtLessThanEqualOrderByIdAsc(
+            WithdrawalStatus status, LocalDateTime updatedAtThreshold);
 
     /** Suma de puntos de retiros en un estado, dentro de un rango de creacion (metricas, CP044). */
     @Query("SELECT COALESCE(SUM(w.points), 0) FROM WithdrawalRequest w "

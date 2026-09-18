@@ -40,7 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * con las mismas dependencias autowireadas del contexto (el bean real no existe en el perfil de
  * test porque {@code sidru.blockchain.enabled=false}; instanciarlo aquí evita además el
  * {@code @Scheduled} disparándose solo durante la prueba). El grace-seconds se fuerza a 0 para
- * no depender de que pase tiempo real de reloj.</p>
+ * no depender de que pase tiempo real de reloj. El umbral es inclusivo (&lt;=) para que una fila
+ * actualizada en el mismo instante entre en el lote.</p>
  */
 @TestPropertySource(properties = "sidru.withdrawal.reconciliation.grace-seconds=0")
 @DisplayName("CP018/CP031 - Emision de CTC al retirar y reconciliacion")
@@ -101,7 +102,8 @@ class Cp018Cp031EmisionOnChainTest extends CpBaseTest {
         var persisted = withdrawalRequestRepository.findById(id).orElseThrow();
         assertEquals(WithdrawalStatus.COMPLETADO, persisted.getStatus());
 
-        verify(contract).mintWithdrawal(eq(VALID_ADDR), eq(BigInteger.valueOf(id)),
+        verify(contract).mintWithdrawal(eq(VALID_ADDR),
+                eq(BigInteger.valueOf(persisted.getChainWithdrawalId())),
                 eq(BigInteger.valueOf(800).multiply(CTC_UNIT)));
         verify(notificationContextFacade).notifyUser(eq(citizen.id()), eq("Retiro completado"),
                 contains("800 CTC"));
@@ -125,16 +127,17 @@ class Cp018Cp031EmisionOnChainTest extends CpBaseTest {
                 .andReturn().getResponse().getContentAsString();
 
         Long id = Long.valueOf(field(body, "id", Integer.class));
-        assertEquals(1, withdrawalRequestRepository.findById(id).orElseThrow().getAttempts());
+        var created = withdrawalRequestRepository.findById(id).orElseThrow();
+        assertEquals(1, created.getAttempts());
 
         reset(contract); // limpiamos el conteo de invocaciones antes de comprobar "no reenvia"
-        when(contract.withdrawalProcessed(BigInteger.valueOf(id))).thenReturn(true);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(created.getChainWithdrawalId()))).thenReturn(true);
 
         reconciliationService().reconcile();
 
         var reconciled = withdrawalRequestRepository.findById(id).orElseThrow();
         assertEquals(WithdrawalStatus.COMPLETADO, reconciled.getStatus());
-        assertEquals("recorded:" + id, reconciled.getTxHash());
+        assertEquals("recorded:" + created.getChainWithdrawalId(), reconciled.getTxHash());
         verify(contract, never()).mintWithdrawal(any(), any(), any());
     }
 
@@ -159,7 +162,7 @@ class Cp018Cp031EmisionOnChainTest extends CpBaseTest {
         withdrawalCommandService.submit(request); // intento 2
         withdrawalCommandService.submit(request); // intento 3 == maxAttempts
 
-        when(contract.withdrawalProcessed(BigInteger.valueOf(id))).thenReturn(false);
+        when(contract.withdrawalProcessed(BigInteger.valueOf(request.getChainWithdrawalId()))).thenReturn(false);
         reconciliationService().reconcile();
 
         var failed = withdrawalRequestRepository.findById(id).orElseThrow();
