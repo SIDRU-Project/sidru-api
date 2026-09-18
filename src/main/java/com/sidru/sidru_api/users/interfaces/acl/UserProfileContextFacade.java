@@ -14,6 +14,16 @@ public interface UserProfileContextFacade {
     /** Subtracts points from a user when redeeming a reward. */
     Long subtractPoints(Long userId, int points);
 
+    /** Refunds points to a user (e.g. a failed withdrawal). Only adds; never touches caps/sessions. */
+    Long refundPoints(Long userId, int points);
+
+    /**
+     * Debits points under a pessimistic lock on the profile (retiro, spec sidru-mainnet):
+     * serializes concurrent withdrawal requests from the same user so the "one withdrawal at
+     * a time" guard cannot be bypassed by a race. Throws InsufficientPointsException.
+     */
+    Long subtractPointsLocked(Long userId, int points);
+
     Boolean existsByUserId(Long userId);
 
     Integer fetchTotalPointsByUserId(Long userId);

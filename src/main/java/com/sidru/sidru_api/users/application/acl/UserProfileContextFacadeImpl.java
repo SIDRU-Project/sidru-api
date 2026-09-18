@@ -2,7 +2,9 @@ package com.sidru.sidru_api.users.application.acl;
 
 import com.sidru.sidru_api.users.domain.model.commands.AddPointsCommand;
 import com.sidru.sidru_api.users.domain.model.commands.CreateUserProfileCommand;
+import com.sidru.sidru_api.users.domain.model.commands.RefundPointsCommand;
 import com.sidru.sidru_api.users.domain.model.commands.SubtractPointsCommand;
+import com.sidru.sidru_api.users.domain.model.commands.SubtractPointsLockedCommand;
 import com.sidru.sidru_api.users.domain.model.queries.GetUserProfileByUserIdQuery;
 import com.sidru.sidru_api.users.domain.services.UserProfileCommandService;
 import com.sidru.sidru_api.users.domain.services.UserProfileQueryService;
@@ -42,6 +44,20 @@ public class UserProfileContextFacadeImpl implements UserProfileContextFacade {
     @Override
     public Long subtractPoints(Long userId, int points) {
         var command = new SubtractPointsCommand(userId, points);
+        var profile = userProfileCommandService.handle(command);
+        return profile.map(p -> p.getId()).orElse(0L);
+    }
+
+    @Override
+    public Long refundPoints(Long userId, int points) {
+        var command = new RefundPointsCommand(userId, points);
+        var profile = userProfileCommandService.handle(command);
+        return profile.map(p -> p.getId()).orElse(0L);
+    }
+
+    @Override
+    public Long subtractPointsLocked(Long userId, int points) {
+        var command = new SubtractPointsLockedCommand(userId, points);
         var profile = userProfileCommandService.handle(command);
         return profile.map(p -> p.getId()).orElse(0L);
     }

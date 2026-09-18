@@ -28,6 +28,9 @@ public class BlockchainProperties {
     /** Base del explorador de bloques, sin barra final (p. ej. https://polygonscan.com). */
     private String explorerBaseUrl;
 
+    /** Alerta cuando la reserva cae por debajo de este respaldo, en bps (10000 = 100 %). */
+    private int reserveAlertBps;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -82,6 +85,14 @@ public class BlockchainProperties {
 
     public void setExplorerBaseUrl(String explorerBaseUrl) {
         this.explorerBaseUrl = explorerBaseUrl;
+    }
+
+    public int getReserveAlertBps() {
+        return reserveAlertBps;
+    }
+
+    public void setReserveAlertBps(int reserveAlertBps) {
+        this.reserveAlertBps = reserveAlertBps;
     }
 
     /** URL del explorador para una transaccion concreta. */

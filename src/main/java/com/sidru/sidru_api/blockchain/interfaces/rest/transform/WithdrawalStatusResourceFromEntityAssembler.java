@@ -22,10 +22,16 @@ public class WithdrawalStatusResourceFromEntityAssembler {
     public WithdrawalStatusResource toResourceFromEntity(WithdrawalRequest entity) {
         return new WithdrawalStatusResource(
                 entity.getId(),
-                entity.getToAddress(),
+                entity.getMode().name(),
+                entity.getPoints(),
                 entity.getAmountWei(),
+                entity.getToAddress(),
                 entity.getStatus().name(),
                 entity.getTxHash(),
-                properties.explorerTxUrl(entity.getTxHash()));
+                properties.explorerTxUrl(entity.getTxHash()),
+                entity.getFailureReason(),
+                entity.getReserveOut(),
+                entity.getCreatedAt(),
+                entity.getUpdatedAt());
     }
 }

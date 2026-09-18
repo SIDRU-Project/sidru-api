@@ -4,22 +4,27 @@ import com.sidru.sidru_api.blockchain.infrastructure.web3j.config.BlockchainProp
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.web3j.abi.EventEncoder;
 import org.web3j.abi.FunctionEncoder;
 import org.web3j.abi.FunctionReturnDecoder;
 import org.web3j.abi.TypeReference;
 import org.web3j.abi.datatypes.Address;
 import org.web3j.abi.datatypes.Bool;
+import org.web3j.abi.datatypes.Event;
 import org.web3j.abi.datatypes.Function;
 import org.web3j.abi.datatypes.Type;
 import org.web3j.abi.datatypes.generated.Bytes32;
 import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
+import org.web3j.crypto.Hash;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.DefaultBlockParameterName;
+import org.web3j.protocol.core.DefaultBlockParameterNumber;
 import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.core.methods.response.EthMaxPriorityFeePerGas;
+import org.web3j.protocol.core.methods.response.Log;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.http.HttpService;
 import org.web3j.tx.RawTransactionManager;
@@ -135,6 +140,157 @@ public class ChapaTuCriptoContract {
                 Arrays.asList(new Address(from), new Uint256(amount), new Uint256(rewardTxId)),
                 Collections.emptyList());
         return sendTransaction(function);
+    }
+
+    // ---------------------------------------------------------------------
+    // Retiro (spec sidru-mainnet): CTC solo existe al retirar puntos.
+    // ---------------------------------------------------------------------
+
+    private static final Event RESERVE_PAID_OUT_EVENT = new Event(
+            "ReservePaidOut",
+            Arrays.asList(
+                    new TypeReference<Address>(true) {},
+                    new TypeReference<Uint256>(true) {},
+                    new TypeReference<Uint256>(false) {},
+                    new TypeReference<Uint256>(false) {}));
+
+    private static final String WITHDRAWAL_ALREADY_PROCESSED_SELECTOR =
+            selector("WithdrawalAlreadyProcessed(uint256)");
+    private static final String INSUFFICIENT_RESERVE_SELECTOR =
+            selector("InsufficientReserve(uint256,uint256)");
+
+    private static String selector(String errorSignature) {
+        return Hash.sha3String(errorSignature).substring(0, 10); // "0x" + 8 hex chars (4 bytes)
+    }
+
+    /**
+     * mintWithdrawal(address to, uint256 withdrawalId, uint256 amount). Mints CTC straight to
+     * the citizen's own wallet when they withdraw app points. Idempotent per withdrawalId.
+     */
+    public TransactionReceipt mintWithdrawal(String to, BigInteger withdrawalId, BigInteger amountWei)
+            throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "mintWithdrawal",
+                Arrays.asList(new Address(to), new Uint256(withdrawalId), new Uint256(amountWei)),
+                Collections.emptyList());
+        return sendTransaction(function);
+    }
+
+    /**
+     * payoutReserve(address to, uint256 withdrawalId, uint256 ctcAmount). Pays a citizen in
+     * reserve asset (USDC) at par instead of minting CTC. Idempotent per withdrawalId. The
+     * reserve amount actually transferred is emitted in {@code ReservePaidOut}; decode it from
+     * the returned receipt with {@link #decodeReserveOut(TransactionReceipt)}.
+     */
+    public TransactionReceipt payoutReserve(String to, BigInteger withdrawalId, BigInteger ctcAmountWei)
+            throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "payoutReserve",
+                Arrays.asList(new Address(to), new Uint256(withdrawalId), new Uint256(ctcAmountWei)),
+                Collections.emptyList());
+        return sendTransaction(function);
+    }
+
+    /**
+     * Decodes the reserve amount (6 decimals, raw units) transferred by a {@link #payoutReserve}
+     * call from the {@code ReservePaidOut} event in the receipt's logs. Returns null if the
+     * event is not present (should not happen for a successful payoutReserve receipt).
+     */
+    public BigInteger decodeReserveOut(TransactionReceipt receipt) {
+        String eventSignature = EventEncoder.encode(RESERVE_PAID_OUT_EVENT);
+        for (Log log : receipt.getLogs()) {
+            if (log.getTopics().isEmpty() || !log.getTopics().get(0).equals(eventSignature)) {
+                continue;
+            }
+            List<Type> nonIndexed = FunctionReturnDecoder.decode(
+                    log.getData(),
+                    org.web3j.abi.Utils.convert(
+                            Arrays.asList(new TypeReference<Uint256>() {}, new TypeReference<Uint256>() {})));
+            if (nonIndexed.size() == 2) {
+                return (BigInteger) nonIndexed.get(1).getValue();
+            }
+        }
+        return null;
+    }
+
+    /** withdrawalProcessed(uint256) view call. True once a withdrawalId was settled (mint or payout). */
+    public boolean withdrawalProcessed(BigInteger withdrawalId) throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "withdrawalProcessed",
+                Collections.singletonList(new Uint256(withdrawalId)),
+                Collections.singletonList(new TypeReference<Bool>() {}));
+        return (Boolean) ethCallSingle(function);
+    }
+
+    /** collateralizationBps() view call. 10000 = exactly 100% backed. */
+    public BigInteger collateralizationBps() throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "collateralizationBps",
+                Collections.emptyList(),
+                Collections.singletonList(new TypeReference<Uint256>() {}));
+        return (BigInteger) ethCallSingle(function);
+    }
+
+    /** reserveBalance() view call. Reserve (e.g. USDC) currently held by the contract. */
+    public BigInteger reserveBalance() throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "reserveBalance",
+                Collections.emptyList(),
+                Collections.singletonList(new TypeReference<Uint256>() {}));
+        return (BigInteger) ethCallSingle(function);
+    }
+
+    /** requiredReserve() view call. Reserve needed to fully back the circulating CTC supply. */
+    public BigInteger requiredReserve() throws Exception {
+        ensureConnected();
+        Function function = new Function(
+                "requiredReserve",
+                Collections.emptyList(),
+                Collections.singletonList(new TypeReference<Uint256>() {}));
+        return (BigInteger) ethCallSingle(function);
+    }
+
+    /**
+     * True if {@code ex} is (or wraps) a {@link ContractRevertException} whose revert data
+     * carries the {@code WithdrawalAlreadyProcessed(uint256)} selector.
+     */
+    public boolean isWithdrawalAlreadyProcessed(Exception ex) {
+        return matchesSelector(ex, WITHDRAWAL_ALREADY_PROCESSED_SELECTOR);
+    }
+
+    /**
+     * True if {@code ex} is (or wraps) a {@link ContractRevertException} whose revert data
+     * carries the {@code InsufficientReserve(uint256,uint256)} selector.
+     */
+    public boolean isInsufficientReserve(Exception ex) {
+        return matchesSelector(ex, INSUFFICIENT_RESERVE_SELECTOR);
+    }
+
+    private boolean matchesSelector(Exception ex, String selectorHex) {
+        if (!(ex instanceof ContractRevertException revert)) {
+            return false;
+        }
+        String reason = revert.getRevertReason();
+        return reason != null && reason.toLowerCase().contains(selectorHex.toLowerCase());
+    }
+
+    /** Runs a view function and returns its single decoded return value. */
+    private Object ethCallSingle(Function function) throws Exception {
+        String encoded = FunctionEncoder.encode(function);
+        EthCall response = web3j.ethCall(
+                        Transaction.createEthCallTransaction(fromAddress, properties.getContractAddress(), encoded),
+                        DefaultBlockParameterName.LATEST)
+                .send();
+        if (response.isReverted()) {
+            throw new IllegalStateException(function.getName() + " reverted: " + response.getRevertReason());
+        }
+        List<Type> decoded = FunctionReturnDecoder.decode(response.getValue(), function.getOutputParameters());
+        return decoded.isEmpty() ? null : decoded.get(0).getValue();
     }
 
     /** balanceOf(address) view call. Returns the on-chain CTC balance in wei. */
@@ -266,7 +422,37 @@ public class ChapaTuCriptoContract {
             throw new IllegalStateException("RPC error sending tx: " + sent.getError().getMessage());
         }
         String txHash = sent.getTransactionHash();
-        return receiptProcessor.waitForTransactionReceipt(txHash);
+        TransactionReceipt receipt = receiptProcessor.waitForTransactionReceipt(txHash);
+        if (!receipt.isStatusOK()) {
+            throw new ContractRevertException(fetchRevertReason(function, receipt.getBlockNumber()));
+        }
+        return receipt;
+    }
+
+    /**
+     * Re-simulates {@code function} as an eth_call at the block where it reverted, to recover
+     * the revert reason (custom error selector + args, or a classic Error(string)). Best-effort:
+     * returns null if the node does not support/return revert data.
+     */
+    private String fetchRevertReason(Function function, BigInteger blockNumber) {
+        try {
+            String encoded = FunctionEncoder.encode(function);
+            EthCall response = web3j.ethCall(
+                            Transaction.createEthCallTransaction(
+                                    fromAddress, properties.getContractAddress(), encoded),
+                            new DefaultBlockParameterNumber(blockNumber))
+                    .send();
+            if (response.getError() != null) {
+                Object data = response.getError().getData();
+                if (data != null) {
+                    return data.toString();
+                }
+            }
+            return response.getRevertReason();
+        } catch (Exception ex) {
+            LOGGER.debug("No se pudo recuperar el revert reason: {}", ex.getMessage());
+            return null;
+        }
     }
 
     /** Queries the node's suggested priority fee; falls back to the Amoy default on null/failure. */

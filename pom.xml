@@ -240,7 +240,8 @@
                                         <include>com.sidru.sidru_api.iam.infrastructure.tokens.jwt.services.TokenServiceImpl</include>
                                         <include>com.sidru.sidru_api.sessions.application.internal.commandservices.RecyclingSessionCommandServiceImpl</include>
                                         <include>com.sidru.sidru_api.blockchain.application.internal.commandservices.WithdrawalCommandService</include>
-                                        <include>com.sidru.sidru_api.blockchain.application.internal.custodial.CustodialWalletService</include>
+                                        <include>com.sidru.sidru_api.blockchain.application.internal.scheduling.WithdrawalReconciliationService</include>
+                                        <include>com.sidru.sidru_api.blockchain.application.internal.queryservices.WalletQueryService</include>
                                         <include>com.sidru.sidru_api.blockchain.domain.model.valueobjects.EvmAddress</include>
                                         <include>com.sidru.sidru_api.metrics.application.internal.queryservices.MetricsService</include>
                                         <include>com.sidru.sidru_api.metrics.interfaces.rest.transform.MetricsCsvAssembler</include>

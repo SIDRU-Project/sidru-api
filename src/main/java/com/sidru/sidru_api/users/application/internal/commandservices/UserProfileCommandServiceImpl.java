@@ -3,7 +3,9 @@ package com.sidru.sidru_api.users.application.internal.commandservices;
 import com.sidru.sidru_api.users.domain.model.aggregates.UserProfile;
 import com.sidru.sidru_api.users.domain.model.commands.AddPointsCommand;
 import com.sidru.sidru_api.users.domain.model.commands.CreateUserProfileCommand;
+import com.sidru.sidru_api.users.domain.model.commands.RefundPointsCommand;
 import com.sidru.sidru_api.users.domain.model.commands.SubtractPointsCommand;
+import com.sidru.sidru_api.users.domain.model.commands.SubtractPointsLockedCommand;
 import com.sidru.sidru_api.users.domain.model.commands.UpdateUserProfileCommand;
 import com.sidru.sidru_api.users.domain.model.exceptions.InsufficientPointsException;
 import com.sidru.sidru_api.users.domain.model.exceptions.UserProfileNotFoundException;
@@ -60,6 +62,27 @@ public class UserProfileCommandServiceImpl implements UserProfileCommandService 
     @Transactional
     public Optional<UserProfile> handle(SubtractPointsCommand command) {
         var profile = userProfileRepository.findByUserId(command.userId())
+                .orElseThrow(UserProfileNotFoundException::new);
+        if (profile.getTotalPoints() < command.points()) {
+            throw new InsufficientPointsException();
+        }
+        profile.subtractPoints(command.points());
+        return Optional.of(userProfileRepository.save(profile));
+    }
+
+    @Override
+    @Transactional
+    public Optional<UserProfile> handle(RefundPointsCommand command) {
+        var profile = userProfileRepository.findByUserId(command.userId())
+                .orElseThrow(UserProfileNotFoundException::new);
+        profile.addPoints(command.points());
+        return Optional.of(userProfileRepository.save(profile));
+    }
+
+    @Override
+    @Transactional
+    public Optional<UserProfile> handle(SubtractPointsLockedCommand command) {
+        var profile = userProfileRepository.findByUserIdForUpdate(command.userId())
                 .orElseThrow(UserProfileNotFoundException::new);
         if (profile.getTotalPoints() < command.points()) {
             throw new InsufficientPointsException();

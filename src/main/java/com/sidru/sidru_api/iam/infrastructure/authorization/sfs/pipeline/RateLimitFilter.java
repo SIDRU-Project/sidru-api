@@ -9,16 +9,19 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Rate limiting de los endpoints de autenticación (RNF-07), por IP cliente.
+ * Rate limiting de endpoints sensibles (RNF-07: autenticación; spec sidru-mainnet: retiro),
+ * por IP cliente.
  *
  * Dos protecciones: máximo {@code maxPerMinute} peticiones por minuto (ventana fija, el
- * exceso devuelve 429), y bloqueo por fuerza bruta tras {@code maxAuthFailures} sign-ins
- * fallidos seguidos (401) durante {@code blockSeconds}; un sign-in correcto resetea el
- * contador.
+ * exceso devuelve 429) sobre cualquiera de los {@code protectedPathSegments}, y bloqueo por
+ * fuerza bruta tras {@code maxAuthFailures} sign-ins fallidos seguidos (401) durante
+ * {@code blockSeconds}; un sign-in correcto resetea el contador (esto último solo aplica al
+ * endpoint de sign-in, no al resto de rutas protegidas).
  *
  * Estado en memoria (una instancia, alcance MVP); en multi-instancia habría que moverlo a
  * un store compartido tipo Redis. Se instancia directo en la cadena de filtros (no como
@@ -27,10 +30,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitFilter.class);
-    private static final String SENSITIVE_SEGMENT = "/authentication";
     private static final String SIGN_IN_SUFFIX = "/sign-in";
     private static final long WINDOW_MILLIS = 60_000L;
 
+    private final List<String> protectedPathSegments;
     private final int maxPerMinute;
     private final int maxAuthFailures;
     private final long blockMillis;
@@ -38,7 +41,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final ConcurrentHashMap<String, Window> windows = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, FailureState> failures = new ConcurrentHashMap<>();
 
-    public RateLimitFilter(int maxPerMinute, int maxAuthFailures, int blockSeconds) {
+    public RateLimitFilter(List<String> protectedPathSegments, int maxPerMinute,
+                           int maxAuthFailures, int blockSeconds) {
+        this.protectedPathSegments = protectedPathSegments;
         this.maxPerMinute = maxPerMinute;
         this.maxAuthFailures = maxAuthFailures;
         this.blockMillis = blockSeconds * 1000L;
@@ -46,8 +51,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        // Only guard the sensitive (authentication) endpoints.
-        return !request.getRequestURI().contains(SENSITIVE_SEGMENT);
+        String uri = request.getRequestURI();
+        return protectedPathSegments.stream().noneMatch(uri::contains);
     }
 
     @Override

@@ -1,10 +1,13 @@
 package com.sidru.sidru_api.blockchain.interfaces.rest.resources;
 
 public record WalletResource(
-        String address,
+        int pointsBalance,
+        String ctcEquivalent,
+        String solesEquivalent,
         String network,
-        String balanceCtc,
-        String balanceWei,
-        String solesRef,
-        String linkedWallet
+        String explorerBaseUrl,
+        String linkedWallet,
+        int minWithdrawalPoints,
+        boolean withdrawalsEnabled,
+        boolean hasWithdrawalInProgress
 ) {}

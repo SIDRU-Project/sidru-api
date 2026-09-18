@@ -99,9 +99,10 @@ public class WebSecurityConfiguration {
                                 .anyRequest().authenticated());
         http.authenticationProvider(authenticationProvider());
         http.addFilterBefore(authorizationRequestFilter(), UsernamePasswordAuthenticationFilter.class);
-        // Rate limiting runs first, before JWT validation (RNF-07).
+        // Rate limiting runs first, before JWT validation (RNF-07 + retiro, spec sidru-mainnet).
         http.addFilterBefore(
-                new RateLimitFilter(rateLimitRequestsPerMinute, rateLimitMaxAuthFailures, rateLimitBlockSeconds),
+                new RateLimitFilter(List.of("/authentication", "/wallet/withdraw"),
+                        rateLimitRequestsPerMinute, rateLimitMaxAuthFailures, rateLimitBlockSeconds),
                 BearerAuthorizationRequestFilter.class);
         return http.build();
     }

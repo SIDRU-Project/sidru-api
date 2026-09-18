@@ -1,5 +1,6 @@
 package com.sidru.sidru_api.metrics.application.internal.queryservices;
 
+import com.sidru.sidru_api.blockchain.interfaces.acl.BlockchainContextFacade;
 import com.sidru.sidru_api.devices.interfaces.acl.DevicesContextFacade;
 import com.sidru.sidru_api.metrics.interfaces.rest.resources.MetricsResource;
 import com.sidru.sidru_api.sessions.interfaces.acl.SessionsContextFacade;
@@ -31,6 +32,7 @@ public class MetricsService {
     private final SessionsContextFacade sessionsFacade;
     private final UserProfileContextFacade usersFacade;
     private final DevicesContextFacade devicesFacade;
+    private final BlockchainContextFacade blockchainFacade;
 
     @Value("${sidru.impact.co2-kg-per-kg-plastic}")
     private double co2KgPerKgPlastic;
@@ -40,10 +42,12 @@ public class MetricsService {
 
     public MetricsService(SessionsContextFacade sessionsFacade,
                           UserProfileContextFacade usersFacade,
-                          DevicesContextFacade devicesFacade) {
+                          DevicesContextFacade devicesFacade,
+                          BlockchainContextFacade blockchainFacade) {
         this.sessionsFacade = sessionsFacade;
         this.usersFacade = usersFacade;
         this.devicesFacade = devicesFacade;
+        this.blockchainFacade = blockchainFacade;
     }
 
     /** Métricas históricas totales, sin filtro de fechas. */
@@ -69,8 +73,10 @@ public class MetricsService {
                 ? sessionsFacade.sumConfirmedCaps(start, end) : sessionsFacade.sumConfirmedCaps();
         double weightGrams = filtered
                 ? sessionsFacade.sumConfirmedWeightGrams(start, end) : sessionsFacade.sumConfirmedWeightGrams();
-        long ctc = filtered
-                ? sessionsFacade.sumConfirmedPoints(start, end) : sessionsFacade.sumConfirmedPoints();
+        // CTC efectivamente retirados (spec sidru-mainnet): ya no hay mint por sesion, el
+        // unico artefacto on-chain es el retiro. start/end ya cubren "todo el historico"
+        // cuando no hay filtro (ver el fallback de arriba).
+        long ctc = blockchainFacade.sumCompletedWithdrawalCtc(start, end);
 
         double weightKg = round2(weightGrams / 1000.0);
         long users = usersFacade.countUsers();

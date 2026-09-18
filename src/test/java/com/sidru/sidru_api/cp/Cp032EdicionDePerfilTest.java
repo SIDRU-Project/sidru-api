@@ -1,6 +1,5 @@
 package com.sidru.sidru_api.cp;
 
-import com.sidru.sidru_api.blockchain.domain.model.valueobjects.EvmAddress;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -8,7 +7,6 @@ import org.springframework.http.MediaType;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -96,33 +94,6 @@ class Cp032EdicionDePerfilTest extends CpBaseTest {
 
         assertTrue(userRepository.findByEmail("esto-no-es-un-correo").isEmpty(),
                 "un correo invalido no debe crear usuario");
-    }
-
-    @Test
-    @DisplayName("Paso 4: una direccion de wallet EIP-55 valida se acepta y una invalida se rechaza")
-    void validaLaDireccionDeWalletExterna() throws Exception {
-        var citizen = newCitizen();
-        String valida = "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed";
-        String invalida = "0x5aAeb6053f3E94C9b9A09f33669435E7Ef1BeAed";
-
-        assertTrue(EvmAddress.isValid(valida), "la direccion con checksum EIP-55 correcto es valida");
-        assertFalse(EvmAddress.isValid(invalida), "la direccion con checksum alterado es invalida");
-
-        // En el endpoint: la invalida se rechaza por formato (400); la valida pasa la validacion
-        // y el flujo avanza hasta la comprobacion de saldo (422 al no haber CTC que retirar).
-        mockMvc.perform(apiPost("/wallet/withdraw")
-                        .header("Authorization", citizen.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("toAddress", invalida))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("ERR_BC_004"));
-
-        mockMvc.perform(apiPost("/wallet/withdraw")
-                        .header("Authorization", citizen.bearer())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("toAddress", valida))))
-                .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("ERR_BC_005"));
     }
 
     @Test

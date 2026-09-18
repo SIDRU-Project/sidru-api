@@ -1,19 +1,22 @@
 package com.sidru.sidru_api.blockchain.interfaces.rest.transform;
 
-import com.sidru.sidru_api.blockchain.application.internal.queryservices.WalletView;
+import com.sidru.sidru_api.blockchain.application.internal.queryservices.WalletSummaryView;
 import com.sidru.sidru_api.blockchain.interfaces.rest.resources.WalletResource;
 
 public class WalletResourceFromViewAssembler {
 
     private WalletResourceFromViewAssembler() {}
 
-    public static WalletResource toResourceFromView(WalletView view) {
+    public static WalletResource toResourceFromView(WalletSummaryView view) {
         return new WalletResource(
-                view.address(),
+                view.pointsBalance(),
+                view.ctcEquivalent(),
+                view.solesEquivalent(),
                 view.network(),
-                view.balanceCtc(),
-                view.balanceWei(),
-                view.solesRef(),
-                view.linkedWallet());
+                view.explorerBaseUrl(),
+                view.linkedWallet(),
+                view.minWithdrawalPoints(),
+                view.withdrawalsEnabled(),
+                view.hasWithdrawalInProgress());
     }
 }

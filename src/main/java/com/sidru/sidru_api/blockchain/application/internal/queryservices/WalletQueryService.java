@@ -1,104 +1,70 @@
 package com.sidru.sidru_api.blockchain.application.internal.queryservices;
 
-import com.sidru.sidru_api.blockchain.application.internal.custodial.CustodialWalletService;
 import com.sidru.sidru_api.blockchain.domain.model.aggregates.WithdrawalRequest;
-import com.sidru.sidru_api.blockchain.infrastructure.persistence.jpa.repositories.BlockchainTransactionRepository;
+import com.sidru.sidru_api.blockchain.domain.model.valueobjects.WithdrawalStatus;
 import com.sidru.sidru_api.blockchain.infrastructure.persistence.jpa.repositories.WithdrawalRequestRepository;
-import com.sidru.sidru_api.blockchain.infrastructure.web3j.ChapaTuCriptoContract;
 import com.sidru.sidru_api.blockchain.infrastructure.web3j.config.BlockchainProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.sidru.sidru_api.blockchain.infrastructure.web3j.config.WithdrawalProperties;
+import com.sidru.sidru_api.users.interfaces.acl.UserProfileContextFacade;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.math.RoundingMode;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Read-side service for the citizen wallet: custodial address, on-chain balance
- * ({@code balanceOf}) and transaction history derived from {@link com.sidru.sidru_api.blockchain.domain.model.aggregates.BlockchainTransaction}.
+ * Read-side service for the citizen wallet (spec sidru-mainnet). Puntos son la unica fuente
+ * del saldo: ya no hay direccion custodial ni balanceOf que consultar en la cadena.
  */
 @Service
 public class WalletQueryService {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(WalletQueryService.class);
-    private static final BigDecimal WEI_PER_CTC = BigDecimal.TEN.pow(18);
-    // points-per-sol = 100 -> 1 CTC ≈ S/ 0.01 (referential).
     private static final BigDecimal POINTS_PER_SOL = new BigDecimal("100");
 
-    private final CustodialWalletService custodialWalletService;
-    private final ChapaTuCriptoContract contract;
-    private final BlockchainTransactionRepository txRepository;
+    private final UserProfileContextFacade userProfileContextFacade;
     private final WithdrawalRequestRepository withdrawalRepository;
-    private final BlockchainProperties properties;
+    private final BlockchainProperties blockchainProperties;
+    private final WithdrawalProperties withdrawalProperties;
 
-    public WalletQueryService(CustodialWalletService custodialWalletService,
-                              ChapaTuCriptoContract contract,
-                              BlockchainTransactionRepository txRepository,
+    public WalletQueryService(UserProfileContextFacade userProfileContextFacade,
                               WithdrawalRequestRepository withdrawalRepository,
-                              BlockchainProperties properties) {
-        this.custodialWalletService = custodialWalletService;
-        this.contract = contract;
-        this.txRepository = txRepository;
+                              BlockchainProperties blockchainProperties,
+                              WithdrawalProperties withdrawalProperties) {
+        this.userProfileContextFacade = userProfileContextFacade;
         this.withdrawalRepository = withdrawalRepository;
-        this.properties = properties;
+        this.blockchainProperties = blockchainProperties;
+        this.withdrawalProperties = withdrawalProperties;
     }
 
-    public WalletView getWallet(Long userId) {
-        String address = custodialWalletService.addressFor(userId);
-        BigInteger balanceWei = balanceOf(address);
+    public WalletSummaryView getWallet(Long userId) {
+        int points = userProfileContextFacade.fetchTotalPointsByUserId(userId);
+        BigDecimal soles = new BigDecimal(points)
+                .divide(POINTS_PER_SOL, 2, RoundingMode.HALF_UP);
 
-        BigDecimal balanceCtc = new BigDecimal(balanceWei).divide(WEI_PER_CTC);
-        BigDecimal solesRef = balanceCtc.divide(POINTS_PER_SOL, 2, RoundingMode.HALF_UP);
-
-        String linkedWallet = withdrawalRepository.findTopByUserIdOrderByIdDesc(userId)
+        String linkedWallet = withdrawalRepository
+                .findTopByUserIdOrderByIdDesc(userId)
+                .filter(w -> w.getStatus() == WithdrawalStatus.COMPLETADO)
                 .map(WithdrawalRequest::getToAddress)
                 .orElse(null);
 
-        return new WalletView(
-                address,
-                properties.getNetworkLabel(),
-                balanceWei.toString(),
-                balanceCtc.toPlainString(),
-                solesRef.toPlainString(),
-                linkedWallet);
+        boolean hasInProgress = !withdrawalRepository
+                .findByUserIdAndStatus(userId, WithdrawalStatus.EN_PROCESO)
+                .isEmpty();
+
+        return new WalletSummaryView(
+                points,
+                String.valueOf(points),
+                soles.toPlainString(),
+                blockchainProperties.getNetworkLabel(),
+                blockchainProperties.getExplorerBaseUrl(),
+                linkedWallet,
+                withdrawalProperties.getMinPoints(),
+                withdrawalProperties.isEnabled(),
+                hasInProgress);
     }
 
-    public List<WalletTransactionView> getTransactions(Long userId) {
-        List<WalletTransactionView> result = new ArrayList<>();
-
-        txRepository.findByUserIdOrderByIdDesc(userId).forEach(tx ->
-                result.add(new WalletTransactionView(
-                        "MINT",
-                        tx.getTxHash(),
-                        tx.isConfirmed() ? "CONFIRMED" : "PENDING",
-                        properties.explorerTxUrl(tx.getTxHash()))));
-
-        withdrawalRepository.findTopByUserIdOrderByIdDesc(userId).ifPresent(w -> {
-            if (w.getTxHash() != null) {
-                result.add(new WalletTransactionView(
-                        "WITHDRAW",
-                        w.getTxHash(),
-                        w.getStatus().name(),
-                        properties.explorerTxUrl(w.getTxHash())));
-            }
-        });
-
-        return result;
-    }
-
-    private BigInteger balanceOf(String address) {
-        if (!properties.isEnabled()) {
-            // Dev mode without blockchain: report zero balance, never touch the network.
-            return BigInteger.ZERO;
-        }
-        try {
-            return contract.balanceOf(address);
-        } catch (Exception ex) {
-            LOGGER.error("balanceOf failed for {}: {}", address, ex.getMessage());
-            throw new IllegalStateException("No se pudo consultar el saldo on-chain", ex);
-        }
+    /** Historial de retiros del usuario, del mas reciente al mas antiguo. */
+    public List<WithdrawalRequest> getWithdrawals(Long userId) {
+        return withdrawalRepository.findAllByUserIdOrderByIdDesc(userId);
     }
 }

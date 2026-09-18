@@ -34,11 +34,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @DisplayName("CP036 - Migraciones y relaciones del modelo de datos")
 class Cp036ModeloDeDatosTest extends CpBaseTest {
 
-    /** Tablas que exige el modelo de datos definido. */
+    /**
+     * Tablas que exige el modelo de datos definido.
+     *
+     * <p>NOTA (spec sidru-mainnet, Fase 3): {@code blockchain_transactions} y
+     * {@code user_wallet_addresses} salieron del modelo junto con {@code BlockchainTransaction}
+     * / {@code UserWalletAddress} (tarea 3.0): el mint por sesion y la direccion custodial por
+     * usuario dejaron de existir; el unico artefacto on-chain es el retiro.</p>
+     */
     private static final List<String> EXPECTED_TABLES = List.of(
             "users", "roles", "user_profiles", "smart_bins", "recycling_sessions",
-            "rewards", "point_transactions", "blockchain_transactions",
-            "user_wallet_addresses", "withdrawal_requests", "device_logs", "audit_logs");
+            "rewards", "point_transactions",
+            "withdrawal_requests", "device_logs", "audit_logs");
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -123,7 +130,7 @@ class Cp036ModeloDeDatosTest extends CpBaseTest {
                 .map(e -> e.getName().toLowerCase())
                 .collect(Collectors.toSet());
         for (String entity : List.of("user", "userprofile", "smartbin", "recyclingsession",
-                "reward", "blockchaintransaction", "auditlog")) {
+                "reward", "auditlog")) {
             assertTrue(managed.contains(entity),
                     "la entidad '" + entity + "' debe estar mapeada. Mapeadas: " + managed);
         }

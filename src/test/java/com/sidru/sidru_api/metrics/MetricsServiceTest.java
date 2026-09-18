@@ -1,5 +1,6 @@
 package com.sidru.sidru_api.metrics;
 
+import com.sidru.sidru_api.blockchain.interfaces.acl.BlockchainContextFacade;
 import com.sidru.sidru_api.devices.interfaces.acl.DevicesContextFacade;
 import com.sidru.sidru_api.metrics.application.internal.queryservices.MetricsService;
 import com.sidru.sidru_api.metrics.interfaces.rest.resources.MetricsResource;
@@ -10,18 +11,23 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
  * Agregación de métricas e impacto ambiental (US-36). Verifica que combina los agregados
  * de las fachadas y deriva CO₂/energía del peso con los factores configurados. Todo mockeado.
+ *
+ * <p>ctcMinted (spec sidru-mainnet, api-contract.md): pasa a sumar puntos de retiros
+ * COMPLETADO (BlockchainContextFacade), ya no sesiones confirmadas.</p>
  */
 class MetricsServiceTest {
 
     private SessionsContextFacade sessions;
     private UserProfileContextFacade users;
     private DevicesContextFacade devices;
+    private BlockchainContextFacade blockchain;
     private MetricsService service;
 
     @BeforeEach
@@ -29,7 +35,8 @@ class MetricsServiceTest {
         sessions = mock(SessionsContextFacade.class);
         users = mock(UserProfileContextFacade.class);
         devices = mock(DevicesContextFacade.class);
-        service = new MetricsService(sessions, users, devices);
+        blockchain = mock(BlockchainContextFacade.class);
+        service = new MetricsService(sessions, users, devices, blockchain);
         ReflectionTestUtils.setField(service, "co2KgPerKgPlastic", 1.5);
         ReflectionTestUtils.setField(service, "energyKwhPerKgPlastic", 5.8);
     }
@@ -40,7 +47,7 @@ class MetricsServiceTest {
         when(sessions.countConfirmedSessions()).thenReturn(12L);
         when(sessions.sumConfirmedCaps()).thenReturn(480L);
         when(sessions.sumConfirmedWeightGrams()).thenReturn(2000.0);  // 2 kg
-        when(sessions.sumConfirmedPoints()).thenReturn(800L);
+        when(blockchain.sumCompletedWithdrawalCtc(any(), any())).thenReturn(800L);
         when(users.countUsers()).thenReturn(7L);
         when(devices.countBins()).thenReturn(3L);
 
