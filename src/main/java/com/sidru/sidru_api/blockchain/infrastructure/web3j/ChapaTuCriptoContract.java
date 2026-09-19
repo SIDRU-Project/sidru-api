@@ -23,6 +23,7 @@ import org.web3j.protocol.core.DefaultBlockParameterNumber;
 import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.EthCall;
+import org.web3j.protocol.core.methods.response.EthChainId;
 import org.web3j.protocol.core.methods.response.EthMaxPriorityFeePerGas;
 import org.web3j.protocol.core.methods.response.Log;
 import org.web3j.protocol.core.methods.response.TransactionReceipt;
@@ -32,6 +33,7 @@ import org.web3j.tx.gas.DefaultGasProvider;
 import org.web3j.tx.response.PollingTransactionReceiptProcessor;
 import org.web3j.tx.response.TransactionReceiptProcessor;
 
+import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.Collections;
@@ -50,12 +52,9 @@ public class ChapaTuCriptoContract {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(ChapaTuCriptoContract.class);
 
-    /** Polygon Amoy chainId (EIP-155 replay protection + EIP-1559 envelope). */
-    private static final long CHAIN_ID = 80002L;
-
     /**
-     * Fallback priority fee for Amoy when {@code eth_maxPriorityFeePerGas} is unavailable.
-     * Amoy commonly requires ~25-30 gwei tips to be relayed; 30 gwei is a safe default.
+     * Fallback priority fee when {@code eth_maxPriorityFeePerGas} is unavailable. Polygon (Amoy and
+     * mainnet) commonly requires ~25-30 gwei tips to be relayed; 30 gwei is a safe default.
      */
     private static final BigInteger FALLBACK_PRIORITY_FEE_WEI =
             BigInteger.valueOf(30L).multiply(BigInteger.TEN.pow(9)); // 30 gwei
@@ -73,6 +72,8 @@ public class ChapaTuCriptoContract {
     private volatile RawTransactionManager txManager;
     private volatile TransactionReceiptProcessor receiptProcessor;
     private volatile String fromAddress;
+    /** EIP-155 chainId of the connected node (137 mainnet, 80002 Amoy); set in ensureConnected. */
+    private volatile long chainId;
 
     public ChapaTuCriptoContract(BlockchainProperties properties) {
         this.properties = properties;
@@ -87,12 +88,32 @@ public class ChapaTuCriptoContract {
         Credentials credentials = Credentials.create(properties.getPrivateKey());
         TransactionReceiptProcessor processor =
                 new PollingTransactionReceiptProcessor(client, 3000, 40);
-        // chainId 80002 = Polygon Amoy (EIP-155 replay protection).
-        this.txManager = new RawTransactionManager(client, credentials, 80002L, processor);
+        // EIP-155 chainId read from the node, never hard-coded: the same build signs for Amoy
+        // (80002) in the rehearsal and for Polygon mainnet (137) in production. A mismatch makes
+        // the node reject every tx with "invalid chain id for signer".
+        long nodeChainId;
+        try {
+            nodeChainId = resolveChainId(client);
+        } catch (IOException e) {
+            // Leave web3j null so the next call retries the connection.
+            throw new IllegalStateException("No se pudo leer el chainId del nodo RPC: " + e.getMessage(), e);
+        }
+        this.chainId = nodeChainId;
+        this.txManager = new RawTransactionManager(client, credentials, nodeChainId, processor);
         this.receiptProcessor = processor;
         this.fromAddress = credentials.getAddress();
         this.web3j = client;
-        LOGGER.info("ChapaTuCripto gateway connected. Backend signer address: {}", fromAddress);
+        LOGGER.info("ChapaTuCripto gateway connected. chainId: {}. Backend signer address: {}",
+                chainId, fromAddress);
+    }
+
+    /** {@code eth_chainId} of the connected node; the node is the source of truth for signing. */
+    public static long resolveChainId(Web3j client) throws IOException {
+        EthChainId response = client.ethChainId().send();
+        if (response.hasError()) {
+            throw new IOException("eth_chainId: " + response.getError().getMessage());
+        }
+        return response.getChainId().longValue();
     }
 
     /**
@@ -384,8 +405,9 @@ public class ChapaTuCriptoContract {
      * dynamically instead: {@code maxPriorityFeePerGas} from {@code eth_maxPriorityFeePerGas} (or a
      * 30 gwei Amoy fallback), {@code maxFeePerGas = baseFee*2 + tip} to absorb base-fee growth. If
      * the latest block has no {@code baseFeePerGas} (non-1559 response) we degrade to a legacy
-     * {@code sendTransaction}. The {@link RawTransactionManager} is built with chainId 80002 to sign
-     * the type-2 envelope. balanceOf is an eth_call and never reaches this path (no gas).
+     * {@code sendTransaction}. The {@link RawTransactionManager} is built with the chainId read from
+     * the node at connect time to sign the type-2 envelope. balanceOf is an eth_call and never
+     * reaches this path (no gas).
      */
     private TransactionReceipt sendTransaction(Function function) throws Exception {
         String encoded = FunctionEncoder.encode(function);
@@ -409,7 +431,7 @@ public class ChapaTuCriptoContract {
             // maxFee covers base-fee growth over ~2 blocks plus the priority tip.
             BigInteger maxFeePerGas = baseFee.multiply(BigInteger.TWO).add(maxPriorityFeePerGas);
             sent = txManager.sendEIP1559Transaction(
-                    CHAIN_ID,
+                    chainId,
                     maxPriorityFeePerGas,
                     maxFeePerGas,
                     TX_GAS_LIMIT,
