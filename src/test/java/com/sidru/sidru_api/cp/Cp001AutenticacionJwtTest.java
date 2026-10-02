@@ -5,10 +5,12 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Value;
+import com.sidru.sidru_api.iam.domain.model.entities.Role;
 import org.springframework.http.MediaType;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -88,5 +90,28 @@ class Cp001AutenticacionJwtTest extends CpBaseTest {
         mockMvc.perform(apiGet("/profiles/me").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(persisted.get().getId()));
+    }
+
+    @Test
+    @DisplayName("El registro publico ignora los roles enviados: pedir ROLE_ADMIN crea un ciudadano")
+    void registroPublicoNoOtorgaRolAdmin() throws Exception {
+        String email = "piloto.sidru." + UUID.randomUUID().toString().substring(0, 8) + "@upc.edu.pe";
+
+        mockMvc.perform(apiPost("/authentication/sign-up")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "fullName", "Usuario Piloto",
+                                "email", email,
+                                "password", PASSWORD,
+                                "district", "San Miguel",
+                                "roles", List.of("ROLE_ADMIN")))))
+                .andExpect(status().isCreated());
+
+        var roles = userRepository.findByEmail(email).orElseThrow().getRoles().stream()
+                .map(Role::getStringName).toList();
+        assertEquals(List.of("ROLE_CITIZEN"), roles, "el registro publico solo crea ciudadanos");
+
+        mockMvc.perform(apiGet("/users").header("Authorization", "Bearer " + signIn(email)))
+                .andExpect(status().isForbidden());
     }
 }

@@ -3,6 +3,8 @@ package com.sidru.sidru_api.cp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sidru.sidru_api.devices.domain.model.aggregates.SmartBin;
 import com.sidru.sidru_api.devices.infrastructure.persistence.jpa.repositories.SmartBinRepository;
+import com.sidru.sidru_api.iam.domain.model.valueobjects.Roles;
+import com.sidru.sidru_api.iam.infrastructure.persistence.jpa.repositories.RoleRepository;
 import com.sidru.sidru_api.iam.infrastructure.persistence.jpa.repositories.UserRepository;
 import com.sidru.sidru_api.sessions.domain.model.aggregates.RecyclingSession;
 import com.sidru.sidru_api.sessions.infrastructure.persistence.jpa.repositories.RecyclingSessionRepository;
@@ -50,6 +52,7 @@ abstract class CpBaseTest {
     @Autowired protected MockMvc mockMvc;
     @Autowired protected ObjectMapper objectMapper;
     @Autowired protected UserRepository userRepository;
+    @Autowired protected RoleRepository roleRepository;
     @Autowired protected UserProfileRepository userProfileRepository;
     @Autowired protected SmartBinRepository smartBinRepository;
     @Autowired protected RecyclingSessionRepository sessionRepository;
@@ -99,23 +102,31 @@ abstract class CpBaseTest {
         return newUser(null);
     }
 
-    /** Registra un usuario nuevo con el rol indicado ({@code null} = ciudadano por defecto). */
+    /**
+     * Registra un usuario nuevo con el rol indicado ({@code null} = ciudadano por defecto).
+     * El registro público solo crea ciudadanos, así que otro rol se otorga en persistencia,
+     * como lo haría un operador, antes de iniciar sesión.
+     */
     protected TestUser newUser(String role) throws Exception {
         String email = "cp-" + UUID.randomUUID().toString().substring(0, 12) + "@upc.edu.pe";
 
-        var signUp = new java.util.HashMap<String, Object>();
-        signUp.put("fullName", "Usuario Piloto");
-        signUp.put("email", email);
-        signUp.put("password", PASSWORD);
-        signUp.put("district", "San Miguel");
-        if (role != null) signUp.put("roles", java.util.List.of(role));
+        var signUp = Map.of(
+                "fullName", "Usuario Piloto",
+                "email", email,
+                "password", PASSWORD,
+                "district", "San Miguel");
 
         mockMvc.perform(apiPost("/authentication/sign-up")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(signUp)))
                 .andExpect(status().isCreated());
 
-        return new TestUser(userRepository.findByEmail(email).orElseThrow().getId(), email, signIn(email));
+        var user = userRepository.findByEmail(email).orElseThrow();
+        if (role != null) {
+            user.addRole(roleRepository.findByName(Roles.valueOf(role)).orElseThrow());
+            userRepository.save(user);
+        }
+        return new TestUser(user.getId(), email, signIn(email));
     }
 
     /** Autentica y devuelve el JWT emitido. */

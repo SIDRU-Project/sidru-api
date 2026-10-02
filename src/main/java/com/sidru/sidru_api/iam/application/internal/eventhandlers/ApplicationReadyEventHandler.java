@@ -9,6 +9,7 @@ import com.sidru.sidru_api.iam.domain.services.UserCommandService;
 import com.sidru.sidru_api.iam.infrastructure.persistence.jpa.repositories.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
@@ -28,14 +29,18 @@ public class ApplicationReadyEventHandler {
     private final UserCommandService userCommandService;
     private final UserRepository userRepository;
 
+    private final String adminPassword;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(ApplicationReadyEventHandler.class);
 
     public ApplicationReadyEventHandler(RoleCommandService roleCommandService,
                                         UserCommandService userCommandService,
-                                        UserRepository userRepository) {
+                                        UserRepository userRepository,
+                                        @Value("${sidru.admin.password:}") String adminPassword) {
         this.roleCommandService = roleCommandService;
         this.userCommandService = userCommandService;
         this.userRepository = userRepository;
+        this.adminPassword = adminPassword;
     }
 
     @EventListener
@@ -50,21 +55,29 @@ public class ApplicationReadyEventHandler {
         LOGGER.info("IAM seeding finished for {} at {}", applicationName, currentTimestamp());
     }
 
+    /**
+     * Crea el admin solo si no existe y si {@code ADMIN_PASSWORD} está definida: la contraseña
+     * nunca vive en el código ni se escribe en el log.
+     */
     private void seedAdminUser() {
         final String adminEmail = "admin@sidru.pe";
         if (userRepository.existsByEmail(adminEmail)) return;
+        if (adminPassword == null || adminPassword.isBlank()) {
+            LOGGER.warn("ADMIN_PASSWORD no está definida: no se crea el usuario {}", adminEmail);
+            return;
+        }
 
         var adminRole = new Role(Roles.ROLE_ADMIN);
         var command = new SignUpCommand(
                 "SIDRU Administrator",
                 adminEmail,
-                "Admin1234",
+                adminPassword,
                 null,
                 "Lima",
                 List.of(adminRole)
         );
         userCommandService.handle(command);
-        LOGGER.info("Admin user seeded — email: {} / password: Admin1234", adminEmail);
+        LOGGER.info("Admin user seeded — email: {}", adminEmail);
     }
 
     private Timestamp currentTimestamp() {
