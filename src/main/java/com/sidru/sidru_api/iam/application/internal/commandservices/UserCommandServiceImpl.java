@@ -145,11 +145,13 @@ public class UserCommandServiceImpl implements UserCommandService {
                     .orElseThrow(UserNotFoundException::new);
             if (isAdmin(user)) throw new SocialAdminNotAllowedException();
         } else {
+            // Identidad aún no vinculada: un correo sin verificar nunca crea ni vincula nada
+            // (evita el pre-secuestro: el atacante abriría una cuenta con el correo de otro).
+            if (!identity.emailVerified()) throw new EmailNotVerifiedException();
             var byEmail = userRepository.findByEmailIgnoreCase(identity.email());
             if (byEmail.isPresent()) {
                 user = byEmail.get();
                 if (isAdmin(user)) throw new SocialAdminNotAllowedException();
-                if (!identity.emailVerified()) throw new EmailNotVerifiedException();
             } else {
                 user = createSocialUser(command, identity);
                 newUser = true;

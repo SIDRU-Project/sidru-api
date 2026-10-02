@@ -60,6 +60,21 @@ class CpWs08Cp09SeguridadSocialTest extends CpWsBase {
     }
 
     @Test
+    @DisplayName("CP-WS-09: email_verified=false sin cuenta previa tampoco crea usuario ni identidad (409)")
+    void correoNoVerificadoSinCuentaNoCreaNada() throws Exception {
+        long usersBefore = userRepository.count();
+        long identitiesBefore = socialIdentityRepository.count();
+
+        google(googleToken(uniqueSub(), uniqueEmail("sinverificar"), false, "Pre Secuestro"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ERR_AUTH_EMAIL_NOT_VERIFIED"))
+                .andExpect(jsonPath("$.token").doesNotExist());
+
+        assertEquals(usersBefore, userRepository.count());
+        assertEquals(identitiesBefore, socialIdentityRepository.count());
+    }
+
+    @Test
     @DisplayName("El correo se compara sin distinguir mayusculas al vincular")
     void vinculacionIgnoraMayusculas() throws Exception {
         var existing = newCitizen();
