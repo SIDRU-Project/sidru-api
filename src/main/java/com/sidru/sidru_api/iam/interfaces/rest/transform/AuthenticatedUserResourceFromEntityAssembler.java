@@ -6,6 +6,10 @@ import com.sidru.sidru_api.iam.interfaces.rest.resources.AuthenticatedUserResour
 public class AuthenticatedUserResourceFromEntityAssembler {
 
     public static AuthenticatedUserResource toResourceFromEntity(User user, String token) {
-        return new AuthenticatedUserResource(user.getId(), user.getEmail(), token);
+        return toResourceFromEntity(user, token, false);
+    }
+
+    public static AuthenticatedUserResource toResourceFromEntity(User user, String token, boolean newUser) {
+        return new AuthenticatedUserResource(user.getId(), user.getEmail(), token, newUser);
     }
 }

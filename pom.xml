@@ -63,6 +63,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- Verificación de ID tokens de Google/Apple (JWKS) con NimbusJwtDecoder -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
 
         <!-- Validation -->
         <dependency>

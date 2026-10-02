@@ -2,6 +2,9 @@ package com.sidru.sidru_api.iam.interfaces.rest;
 
 import com.sidru.sidru_api.iam.domain.model.exceptions.*;
 import com.sidru.sidru_api.shared.interfaces.rest.resources.ErrorResource;
+import com.sidru.sidru_api.iam.infrastructure.utils.IamErrorCatalog;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindingResult;
@@ -17,6 +20,8 @@ import static com.sidru.sidru_api.iam.infrastructure.utils.IamErrorCatalog.*;
 
 @RestControllerAdvice(basePackages = "com.sidru.sidru_api.iam")
 public class IamControllerAdvice {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(IamControllerAdvice.class);
 
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ExceptionHandler(UserNotFoundException.class)
@@ -64,6 +69,46 @@ public class IamControllerAdvice {
         ErrorResource response = new ErrorResource();
         response.setCode(EMAIL_ALREADY_EXISTS.getCode());
         response.setMessage(EMAIL_ALREADY_EXISTS.getMessage());
+        response.setTimeStamp(LocalDateTime.now());
+        return response;
+    }
+
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(InvalidSocialTokenException.class)
+    public ErrorResource handleInvalidSocialToken(InvalidSocialTokenException exception) {
+        LOGGER.warn("Social sign-in rejected: {}", exception.getMessage());
+        return error(SOCIAL_INVALID_TOKEN);
+    }
+
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(SocialAdminNotAllowedException.class)
+    public ErrorResource handleSocialAdminNotAllowed() {
+        return error(SOCIAL_ADMIN_NOT_ALLOWED);
+    }
+
+    @ResponseStatus(HttpStatus.CONFLICT)
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ErrorResource handleEmailNotVerified() {
+        return error(EMAIL_NOT_VERIFIED);
+    }
+
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    @ExceptionHandler(SocialProviderDisabledException.class)
+    public ErrorResource handleSocialProviderDisabled() {
+        return error(SOCIAL_PROVIDER_DISABLED);
+    }
+
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    @ExceptionHandler(SocialProviderUnavailableException.class)
+    public ErrorResource handleSocialProviderUnavailable(SocialProviderUnavailableException exception) {
+        LOGGER.warn("Social provider keys unavailable: {}", exception.getMessage());
+        return error(SOCIAL_PROVIDER_UNAVAILABLE);
+    }
+
+    private static ErrorResource error(IamErrorCatalog entry) {
+        ErrorResource response = new ErrorResource();
+        response.setCode(entry.getCode());
+        response.setMessage(entry.getMessage());
         response.setTimeStamp(LocalDateTime.now());
         return response;
     }

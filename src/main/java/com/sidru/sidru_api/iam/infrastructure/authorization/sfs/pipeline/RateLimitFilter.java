@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(RateLimitFilter.class);
-    private static final String SIGN_IN_SUFFIX = "/sign-in";
+    private static final List<String> SIGN_IN_SUFFIXES = List.of("/sign-in", "/google", "/apple");
     private static final long WINDOW_MILLIS = 60_000L;
 
     private final List<String> protectedPathSegments;
@@ -73,8 +73,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
 
-        // Brute-force tracking only on the sign-in endpoint.
-        if (request.getRequestURI().endsWith(SIGN_IN_SUFFIX)) {
+        // Brute-force tracking only on the sign-in endpoints (password and social).
+        if (SIGN_IN_SUFFIXES.stream().anyMatch(request.getRequestURI()::endsWith)) {
             if (response.getStatus() == HttpServletResponse.SC_UNAUTHORIZED) {
                 registerFailure(ip, now);
             } else if (response.getStatus() < 400) {
