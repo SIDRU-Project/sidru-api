@@ -26,6 +26,16 @@ abstract class CpWsBase extends CpBaseTest {
         return FakeIdTokenVerifier.token(SocialProvider.GOOGLE, sub, email, verified, name);
     }
 
+    protected static String googleTokenWithNonce(String sub, String email, String nonce) {
+        return FakeIdTokenVerifier.token(SocialProvider.GOOGLE, sub, email, true, "Con Nonce", nonce);
+    }
+
+    protected ResultActions googleWithNonce(String idToken, String nonce) throws Exception {
+        return mockMvc.perform(apiPost("/authentication/google")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(json(Map.of("idToken", idToken, "nonce", nonce))));
+    }
+
     protected static String appleToken(String sub, String email, boolean verified) {
         return FakeIdTokenVerifier.token(SocialProvider.APPLE, sub, email, verified, null);
     }

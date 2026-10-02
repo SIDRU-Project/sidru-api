@@ -73,7 +73,7 @@ public class JwksIdTokenVerifier implements IdTokenVerifier {
             throw new InvalidSocialTokenException("El token no trae sub o email", null);
         }
         return new VerifiedIdentity(subject, email.trim(), isTrue(jwt.getClaim("email_verified")),
-                jwt.getClaimAsString("name"));
+                jwt.getClaimAsString("name"), jwt.getClaimAsString("nonce"));
     }
 
     /** Google envía un booleano; Apple a veces la cadena "true". */

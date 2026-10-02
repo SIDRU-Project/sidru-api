@@ -12,6 +12,7 @@ import com.sidru.sidru_api.iam.domain.model.commands.SocialSignInCommand;
 import com.sidru.sidru_api.iam.domain.model.entities.SocialIdentity;
 import com.sidru.sidru_api.iam.domain.model.exceptions.EmailAlreadyExistsException;
 import com.sidru.sidru_api.iam.domain.model.exceptions.EmailNotVerifiedException;
+import com.sidru.sidru_api.iam.domain.model.exceptions.InvalidSocialTokenException;
 import com.sidru.sidru_api.iam.domain.model.exceptions.InvalidCredentialsException;
 import com.sidru.sidru_api.iam.domain.model.exceptions.RoleNotFoundException;
 import com.sidru.sidru_api.iam.domain.model.exceptions.SocialAdminNotAllowedException;
@@ -31,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
@@ -126,11 +129,24 @@ public class UserCommandServiceImpl implements UserCommandService {
         if (!idTokenVerifier.isEnabled(command.provider()))
             throw new SocialProviderDisabledException();
         var identity = idTokenVerifier.verify(command.provider(), command.token());
+        requireMatchingNonce(command.nonce(), identity.nonce());
 
         try {
             return transactionTemplate.execute(status -> signInWithIdentity(command, identity));
         } catch (DataIntegrityViolationException e) {
             return transactionTemplate.execute(status -> signInWithIdentity(command, identity));
+        }
+    }
+
+    /**
+     * Si el cliente envió un nonce, el token debe traer el mismo (liga el token a la sesión del navegador
+     * que inició el login). Sin nonce en el request no se exige nada. Comparación en tiempo constante.
+     */
+    private static void requireMatchingNonce(String expected, String actual) {
+        if (expected == null) return;
+        if (actual == null || !MessageDigest.isEqual(
+                expected.getBytes(StandardCharsets.UTF_8), actual.getBytes(StandardCharsets.UTF_8))) {
+            throw new InvalidSocialTokenException("El nonce del token no coincide con el de la solicitud", null);
         }
     }
 

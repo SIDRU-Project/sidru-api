@@ -89,7 +89,7 @@ public class AuthenticationController {
             description = "Verifica el ID token de Google y devuelve el JWT de SIDRU. Crea la cuenta la primera vez.")
     @PostMapping("/google")
     public ResponseEntity<AuthenticatedUserResource> google(@Valid @RequestBody GoogleSignInResource resource) {
-        return socialSignIn(new SocialSignInCommand(SocialProvider.GOOGLE, resource.idToken(), null));
+        return socialSignIn(new SocialSignInCommand(SocialProvider.GOOGLE, resource.idToken(), null, resource.nonce()));
     }
 
     @Operation(summary = "Entrar con Apple",

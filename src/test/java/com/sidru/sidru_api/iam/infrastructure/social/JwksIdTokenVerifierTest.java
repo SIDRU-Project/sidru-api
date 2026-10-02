@@ -104,6 +104,14 @@ class JwksIdTokenVerifierTest {
     }
 
     @Test
+    @DisplayName("el claim nonce llega en VerifiedIdentity; sin el claim queda null")
+    void nonceDelToken() throws Exception {
+        var conNonce = validClaims().claim("nonce", "abc123").build();
+        assertEquals("abc123", verifier.verify(SocialProvider.GOOGLE, sign(conNonce, signingKey)).nonce());
+        assertNull(verifier.verify(SocialProvider.GOOGLE, sign(validClaims().build(), signingKey)).nonce());
+    }
+
+    @Test
     @DisplayName("issuer sin https:// (accounts.google.com) tambien es valido")
     void issuerAlternativo() throws Exception {
         var claims = validClaims().issuer("accounts.google.com").build();
